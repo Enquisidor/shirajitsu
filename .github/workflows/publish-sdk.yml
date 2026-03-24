@@ -36,13 +36,9 @@ jobs:
         run: pnpm --filter @shirajitsu/core build
 
       - name: Set version
-        working-directory: sdk/core
-        run: |
-          VERSION="${{ inputs.version || github.ref_name }}"
-          npm version "$VERSION" --no-git-tag-version
+        run: pnpm --filter @shirajitsu/core version "${{ inputs.version || github.ref_name }}" --no-git-tag-version
 
       - name: Publish @shirajitsu/core
-        working-directory: sdk/core
-        run: npm publish --provenance --access public
+        run: pnpm --filter @shirajitsu/core publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
