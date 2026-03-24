@@ -1,0 +1,53 @@
+name: deploy-gateway
+
+on:
+  workflow_run:
+    workflows: [gateway]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Docker image tag to deploy (defaults to latest main SHA)
+        required: false
+
+jobs:
+  deploy:
+    name: Deploy Gateway to GKE
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_REGION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy
+        run: |
+          helm upgrade --install gateway \
+            infra/k8s/helm/gateway \
+            --namespace shirajitsu \
+            --create-namespace \
+            --set image.tag=${{ env.IMAGE_TAG }} \
+            --set image.repository=gcr.io/${{ secrets.GCP_PROJECT_ID }}/gateway \
+            --wait \
+            --timeout 5m

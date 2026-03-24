@@ -1,0 +1,82 @@
+name: publish-sdk
+
+on:
+  workflow_run:
+    workflows: [sdk]
+    types: [completed]
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: sdk workflow run ID to pull artifact from
+        required: true
+      version:
+        description: Version to publish (e.g. 1.2.3) — overrides release tag
+        required: false
+
+jobs:
+  publish:
+    name: Publish sdk to npm
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve artifact run ID
+        id: run
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download SDK artifact (push/dispatch trigger)
+        if: github.event_name != 'release'
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-core-dist-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: sdk/core/dist
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download latest SDK artifact (release trigger)
+        if: github.event_name == 'release'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: sdk.yml
+          branch: main
+          name_is_regexp: true
+          name: sdk-core-dist-.*
+          path: sdk/core/dist
+          flat: true
+
+      - name: Set version
+        working-directory: sdk/core
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish @shirajitsu/core
+        working-directory: sdk/core
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,51 @@
+name: sdk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sdk/**"
+      - "shared/types/**"
+      - ".github/workflows/sdk.yml"
+  pull_request:
+    paths:
+      - "sdk/**"
+      - "shared/types/**"
+      - ".github/workflows/sdk.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test & Build sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @shirajitsu/types build
+
+      - name: Typecheck sdk/core
+        run: pnpm --filter @shirajitsu/core typecheck
+
+      - name: Test sdk/core
+        run: pnpm --filter @shirajitsu/core test
+
+      - name: Build sdk/core
+        run: pnpm --filter @shirajitsu/core build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-core-dist-${{ github.sha }}
+          path: sdk/core/dist
+          retention-days: 7

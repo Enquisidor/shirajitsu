@@ -1,0 +1,59 @@
+name: extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ui/extension/**'
+      - 'ui/components/**'
+      - 'shared/types/**'
+      - '.github/workflows/extension.yml'
+  pull_request:
+    paths:
+      - 'ui/extension/**'
+      - 'ui/components/**'
+      - 'shared/types/**'
+      - '.github/workflows/extension.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test & Build Web Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: |
+          pnpm --filter @shirajitsu/types build
+          pnpm --filter @shirajitsu/react build
+
+      - name: Typecheck
+        run: pnpm --filter @shirajitsu/extension typecheck
+
+      - name: Test
+        run: pnpm --filter @shirajitsu/extension test
+
+      - name: Build
+        run: pnpm --filter @shirajitsu/extension build
+
+      - name: Package as zip
+        run: |
+          cd ui/extension/dist
+          zip -r ../../../shirajitsu-extension.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-${{ github.sha }}
+          path: shirajitsu-extension.zip
+          retention-days: 30

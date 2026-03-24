@@ -1,0 +1,59 @@
+name: claim-extractor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/claim-extractor/**'
+      - '.github/workflows/claim-extractor.yml'
+  pull_request:
+    paths:
+      - 'services/claim-extractor/**'
+      - '.github/workflows/claim-extractor.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test & Build Claim Extractor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/claim-extractor:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: services/claim-extractor/go.sum
+
+      - name: Vet
+        working-directory: services/claim-extractor
+        run: go vet ./...
+
+      - name: Test
+        working-directory: services/claim-extractor
+        run: go test ./...
+
+      - name: Authenticate to GCP
+        if: github.event_name != 'pull_request'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for GCR
+        if: github.event_name != 'pull_request'
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and push Docker image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: services/claim-extractor
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

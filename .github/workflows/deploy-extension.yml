@@ -1,0 +1,58 @@
+name: deploy-extension
+
+on:
+  workflow_run:
+    workflows: [extension]
+    types: [completed]
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: extension workflow run ID to pull artifact from
+        required: true
+
+jobs:
+  release:
+    name: Attach Web Extension to GitHub Release
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve artifact run ID
+        id: run
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: github.event_name != 'release'
+        with:
+          name: extension-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: .
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download latest extension artifact (release trigger)
+        if: github.event_name == 'release'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: extension.yml
+          branch: main
+          name_is_regexp: true
+          name: extension-.*
+          path: .
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: shirajitsu-extension.zip
