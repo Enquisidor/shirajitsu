@@ -13,7 +13,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Web to Firebase Hosting
+    name: Deploy to Firebase Hosting
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -40,11 +40,12 @@ jobs:
           run-id: ${{ steps.run.outputs.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to Firebase
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-          entryPoint: ui/web
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Firebase Hosting
+        run: npx firebase-tools deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
+        working-directory: ui/web

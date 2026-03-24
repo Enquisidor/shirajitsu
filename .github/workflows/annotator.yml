@@ -14,13 +14,8 @@ on:
 
 jobs:
   build:
-    name: Test & Build Annotator
+    name: Test & Build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/annotator:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,23 +35,12 @@ jobs:
         working-directory: services/annotator
         run: go test ./...
 
-      - name: Authenticate to GCP
-        if: github.event_name != 'pull_request'
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Build binary
+        working-directory: services/annotator
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o annotator ./cmd/server
 
-      - name: Configure Docker for GCR
-        if: github.event_name != 'pull_request'
-        run: gcloud auth configure-docker gcr.io --quiet
-
-      - name: Build and push Docker image
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
+      - uses: actions/upload-artifact@v4
         with:
-          context: services/annotator
-          push: true
-          tags: ${{ env.IMAGE }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: annotator-${{ github.sha }}
+          path: services/annotator/annotator
+          retention-days: 7

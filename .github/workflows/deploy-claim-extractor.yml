@@ -7,13 +7,13 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: Docker image tag to deploy (defaults to latest main SHA)
-        required: false
+      run_id:
+        description: claim-extractor workflow run ID to pull artifact from
+        required: true
 
 jobs:
   deploy:
-    name: Deploy Claim Extractor GKE
+    name: Deploy to GKE
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -22,15 +22,44 @@ jobs:
       contents: read
       id-token: write
     env:
-      IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_sha || github.sha }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve artifact run ID
+        id: run
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "id=${{ inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: claim-extractor-${{ env.SHA }}
+          path: services/claim-extractor
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Make binary executable
+        run: chmod +x services/claim-extractor/claim-extractor
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/claim-extractor
+          push: true
+          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/claim-extractor:${{ env.SHA }}
 
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v2
@@ -47,7 +76,7 @@ jobs:
             infra/k8s/helm/claim-extractor \
             --namespace shirajitsu \
             --create-namespace \
-            --set image.tag=${{ env.IMAGE_TAG }} \
+            --set image.tag=${{ env.SHA }} \
             --set image.repository=gcr.io/${{ secrets.GCP_PROJECT_ID }}/claim-extractor \
             --wait \
             --timeout 5m
