@@ -8,12 +8,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/shirajitsu/claim-extractor/internal/claude"
+	"github.com/shirajitsu/claim-extractor/internal/llm"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	extractor := claude.NewExtractor(os.Getenv("CLAUDE_API_KEY"))
+
+	cfg := llm.ConfigFromEnv()
+	provider, err := llm.New(cfg)
+	if err != nil {
+		logger.Error("failed to initialise LLM provider", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("LLM provider initialised", "provider", cfg.Provider, "model", cfg.Model)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -27,8 +34,12 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
+		if body.Text == "" {
+			http.Error(w, "text must not be empty", http.StatusUnprocessableEntity)
+			return
+		}
 
-		claims, err := extractor.Extract(r.Context(), body.Text)
+		claims, err := provider.Extract(r.Context(), body.Text)
 		if err != nil {
 			logger.Error("extraction failed", "err", err)
 			http.Error(w, "extraction failed", http.StatusInternalServerError)
@@ -43,7 +54,7 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	addr := ":" + env("PORT", "8080")
+	addr := ":" + envOr("PORT", "8080")
 	logger.Info("claim-extractor starting", "addr", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		logger.Error("server failed", "err", err)
@@ -51,7 +62,7 @@ func main() {
 	}
 }
 
-func env(key, fallback string) string {
+func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}

@@ -1,0 +1,42 @@
+# Local development stack
+version: "3.9"
+
+services:
+  gateway:
+    build: ../services/gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+      - CLAIM_EXTRACTOR_URL=http://claim-extractor:8080
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+    depends_on:
+      - redis
+      - claim-extractor
+
+  claim-extractor:
+    build: ../services/claim-extractor
+    ports:
+      - "8081:8080"
+    environment:
+      - AI_PROVIDER=${AI_PROVIDER:-anthropic}
+      - AI_MODEL=${AI_MODEL:-claude-sonnet-4-20250514}
+      - AI_API_KEY=${AI_API_KEY}
+      - SOURCE_EVALUATOR_URL=http://source-evaluator:8080
+
+  source-evaluator:
+    build: ../services/source-evaluator
+    ports:
+      - "8082:8080"
+    environment:
+      - ANNOTATOR_URL=http://annotator:8080
+
+  annotator:
+    build: ../services/annotator
+    ports:
+      - "8083:8080"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

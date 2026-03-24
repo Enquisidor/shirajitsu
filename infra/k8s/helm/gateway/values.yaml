@@ -1,0 +1,29 @@
+replicaCount: 2
+
+image:
+  repository: gcr.io/shirajitsu/gateway
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  REDIS_ADDR: redis:6379
+  # CLERK_SECRET_KEY: set via secret
+  # CLAIM_EXTRACTOR_URL: set per environment
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
