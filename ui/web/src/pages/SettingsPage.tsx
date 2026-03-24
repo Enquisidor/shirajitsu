@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/clerk-react'
 import type { AIModel } from '@shirajitsu/types'
 import { DEFAULT_MODEL, SUPPORTED_MODELS } from '@shirajitsu/types'
