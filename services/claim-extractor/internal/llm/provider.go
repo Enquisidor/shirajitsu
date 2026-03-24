@@ -8,6 +8,12 @@ import (
 	"github.com/shirajitsu/claim-extractor/internal/domain"
 )
 
+// Model is the user-selected model forwarded from the gateway.
+type Model struct {
+	Provider string `json:"provider"`
+	ModelID  string `json:"modelId"`
+}
+
 // Provider is the interface any LLM backend must satisfy.
 // Adding a new model = implement this interface and register it below.
 type Provider interface {

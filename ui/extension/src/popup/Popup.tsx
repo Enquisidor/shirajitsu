@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { DetectedContext } from '@/context/detector'
 import type { AIModel, UserSettings } from '@shirajitsu/types'
 import { DEFAULT_USER_SETTINGS } from '@shirajitsu/types'

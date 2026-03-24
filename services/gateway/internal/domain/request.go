@@ -10,11 +10,18 @@ const (
 	ContextReader Context = "reader"
 )
 
+// AIModel carries the user's model selection. Empty fields mean "use service default".
+type AIModel struct {
+	Provider string `json:"provider"` // e.g. "anthropic"
+	ModelID  string `json:"modelId"`  // e.g. "claude-sonnet-4-20250514"
+}
+
 // AnalyzeRequest is the domain object representing an incoming analysis request.
 type AnalyzeRequest struct {
 	Text           string
 	Context        Context
-	PlatformUserID string // hashed; empty for user-JWT auth
+	PlatformUserID string   // hashed; empty for user-JWT auth
+	Model          *AIModel // nil = use the claim-extractor's configured default
 }
 
 func (r AnalyzeRequest) Validate() error {

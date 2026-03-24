@@ -1,4 +1,3 @@
-import React from 'react'
 
 // TODO: wire to gateway API key management endpoints
 export function ApiKeysPage() {

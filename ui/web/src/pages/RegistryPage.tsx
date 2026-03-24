@@ -1,4 +1,3 @@
-import React from 'react'
 import registry from '../../../../registry/source-registry.json'
 
 export function RegistryPage() {

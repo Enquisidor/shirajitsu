@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Shirajitsu",
+  "description": "Annotates factual claims in text — surfaces tension, never verdicts.",
+  "version": "0.0.1",
+  "permissions": ["storage", "activeTab", "scripting", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/index.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  }
+}

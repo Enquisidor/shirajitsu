@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Annotation } from '@shirajitsu/types'
 import { AnnotationCard } from '@shirajitsu/react'
 

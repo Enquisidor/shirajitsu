@@ -12,9 +12,10 @@ import (
 )
 
 type analyzeHTTPRequest struct {
-	Text           string `json:"text"`
-	Context        string `json:"context"`
-	PlatformUserID string `json:"platformUserId,omitempty"`
+	Text           string           `json:"text"`
+	Context        string           `json:"context"`
+	PlatformUserID string           `json:"platformUserId,omitempty"`
+	Model          *domain.AIModel  `json:"model,omitempty"` // user's model selection; nil = use service default
 }
 
 func Analyze(logger *slog.Logger) http.HandlerFunc {
@@ -31,13 +32,14 @@ func Analyze(logger *slog.Logger) http.HandlerFunc {
 			Text:           body.Text,
 			Context:        domain.Context(body.Context),
 			PlatformUserID: body.PlatformUserID,
+			Model:          body.Model,
 		}
 		if err := req.Validate(); err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
 
-		// Forward to claim-extractor service
+		// Forward to claim-extractor, including model selection so it can override its default
 		payload, _ := json.Marshal(body)
 		resp, err := http.Post(claimExtractorURL+"/extract", "application/json", bytes.NewReader(payload))
 		if err != nil {

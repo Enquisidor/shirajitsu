@@ -1,4 +1,3 @@
-import React from 'react'
 import { useUser } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 
@@ -12,6 +11,7 @@ export function DashboardPage() {
         <Link to="/api-keys">API Keys</Link>
         <Link to="/usage">Usage</Link>
         <Link to="/registry">Source Registry</Link>
+        <Link to="/settings">Settings</Link>
       </nav>
     </main>
   )

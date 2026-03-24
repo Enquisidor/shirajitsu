@@ -28,7 +28,8 @@ func main() {
 
 	r.Post("/extract", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Text string `json:"text"`
+			Text  string     `json:"text"`
+			Model *llm.Model `json:"model,omitempty"` // user's selection; nil = use server default
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, "invalid body", http.StatusBadRequest)
@@ -39,7 +40,23 @@ func main() {
 			return
 		}
 
-		claims, err := provider.Extract(r.Context(), body.Text)
+		// Use request-scoped provider if the user specified a model, else use the server default
+		p := provider
+		if body.Model != nil && body.Model.Provider != "" && body.Model.ModelID != "" {
+			override, err := llm.New(llm.Config{
+				Provider: body.Model.Provider,
+				Model:    body.Model.ModelID,
+				APIKey:   cfg.APIKey, // reuse server-side API key
+				BaseURL:  cfg.BaseURL,
+			})
+			if err != nil {
+				http.Error(w, "unsupported model: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			p = override
+		}
+
+		claims, err := p.Extract(r.Context(), body.Text)
 		if err != nil {
 			logger.Error("extraction failed", "err", err)
 			http.Error(w, "extraction failed", http.StatusInternalServerError)

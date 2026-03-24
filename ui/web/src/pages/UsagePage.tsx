@@ -1,4 +1,3 @@
-import React from 'react'
 
 // TODO: wire to gateway usage/metrics endpoints
 export function UsagePage() {
