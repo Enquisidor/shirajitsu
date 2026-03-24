@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import type { DetectedContext } from '@/context/detector'
-import type { UserSettings } from '@shirajitsu/types'
+import type { AIModel, UserSettings } from '@shirajitsu/types'
 import { DEFAULT_USER_SETTINGS } from '@shirajitsu/types'
+import { ModelSelector } from '@shirajitsu/react'
 
 export function Popup() {
   const [context, setContext] = useState<DetectedContext | null>(null)
@@ -60,6 +61,12 @@ export function Popup() {
     chrome.storage.sync.set({ manualModeOverride: override })
   }
 
+  function saveModel(model: AIModel) {
+    const next = { ...settings, selectedModel: model }
+    setSettings(next)
+    chrome.storage.sync.set({ selectedModel: model })
+  }
+
   return (
     <div className="popup">
       <header className="popup__header">
@@ -98,6 +105,11 @@ export function Popup() {
 
       {status === 'error' && <p className="popup__error">{errorMsg}</p>}
       {status === 'done' && <p className="popup__success">Analysis complete — see sidebar</p>}
+
+      <div className="popup__model">
+        <span className="popup__section-label">Model:</span>
+        <ModelSelector value={settings.selectedModel} onChange={saveModel} compact />
+      </div>
 
       <div className="popup__display-toggle">
         <span>Display:</span>

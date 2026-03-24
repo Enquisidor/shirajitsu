@@ -54,14 +54,16 @@ describe('AnnotationCard', () => {
     expect(screen.getByText('0 of 4 sources frame this differently')).toBeTruthy()
   })
 
-  it('truncates long claim text and shows expand button', async () => {
+  it('truncates long claim text and expands on click', async () => {
     const longClaim = 'a'.repeat(150)
     const annotation: Annotation = {
       ...baseAnnotation,
       claim: { ...baseAnnotation.claim, claimText: longClaim },
     }
-    render(<AnnotationCard annotation={annotation} />)
+    const { rerender } = render(<AnnotationCard annotation={annotation} expanded={false} onToggleExpand={() => rerender(<AnnotationCard annotation={annotation} expanded={true} onToggleExpand={() => {}} />)} />)
     expect(screen.getByText('Show more')).toBeTruthy()
+    await userEvent.click(screen.getByText('Show more'))
+    expect(screen.getByText('Show less')).toBeTruthy()
   })
 
   it('does not render tension rating when null', () => {

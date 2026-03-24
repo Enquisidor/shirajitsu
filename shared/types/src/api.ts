@@ -1,4 +1,5 @@
 import type { Annotation } from './annotation.js'
+import type { AIModel } from './models.js'
 
 /** Sent by extension or SDK to the gateway */
 export interface AnalyzeRequest {
@@ -7,6 +8,9 @@ export interface AnalyzeRequest {
   context: 'writer' | 'reader'
   /** Optional: hashed platform user ID, required for partner API key auth */
   platformUserId?: string
+  /** The AI model the user has selected. Gateway forwards this to claim-extractor.
+   *  Optional: if omitted, the gateway uses the user's saved account preference. */
+  model?: AIModel
 }
 
 export interface AnalyzeResponse {
