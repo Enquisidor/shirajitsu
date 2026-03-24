@@ -27,7 +27,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache-dependency-path: services/claim-extractor/go.sum
+
+      - name: Tidy
+        working-directory: services/claim-extractor
+        run: go mod tidy
 
       - name: Vet
         working-directory: services/claim-extractor

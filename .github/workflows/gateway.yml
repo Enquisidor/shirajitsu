@@ -28,7 +28,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache-dependency-path: services/gateway/go.sum
+
+      - name: Tidy
+        working-directory: services/gateway
+        run: go mod tidy
 
       - name: Vet
         working-directory: services/gateway
