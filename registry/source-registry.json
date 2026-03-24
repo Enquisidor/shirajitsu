@@ -1,0 +1,92 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-01",
+  "tiers": {
+    "tier1": {
+      "label": "Institutional",
+      "description": "Peer-reviewed publications, government data, established academic or scientific bodies.",
+      "generatesRating": true,
+      "domains": [
+        "pubmed.ncbi.nlm.nih.gov",
+        "nih.gov",
+        "cdc.gov",
+        "who.int",
+        "cochrane.org",
+        "nature.com",
+        "science.org",
+        "nejm.org",
+        "thelancet.com",
+        "bmj.com",
+        "jstor.org",
+        "arxiv.org",
+        "ncbi.nlm.nih.gov",
+        "pnas.org",
+        "cell.com"
+      ],
+      "patterns": [
+        ".edu/",
+        ".gov/"
+      ]
+    },
+    "tier2": {
+      "label": "Reputable",
+      "description": "Established journalism and named subject-matter experts with documented credentials.",
+      "generatesRating": true,
+      "domains": [
+        "nytimes.com",
+        "washingtonpost.com",
+        "theguardian.com",
+        "bbc.com",
+        "bbc.co.uk",
+        "reuters.com",
+        "apnews.com",
+        "economist.com",
+        "ft.com",
+        "wsj.com",
+        "npr.org",
+        "pbs.org",
+        "politico.com",
+        "theatlantic.com",
+        "scientificamerican.com",
+        "newscientist.com",
+        "wired.com",
+        "propublica.org",
+        "thetimes.co.uk",
+        "time.com"
+      ],
+      "notes": {
+        "wsj.com": "Opinion section should be treated as Tier 3 for factual claims.",
+        "nytimes.com": "Opinion section should be treated as Tier 3 for factual claims."
+      }
+    },
+    "communityVerified": {
+      "label": "Community-Verified",
+      "description": "Community-edited. Surfaced as context with explicit labeling. Eligible as anchor for commentary layer.",
+      "generatesRating": false,
+      "labelOverride": "Community-edited source",
+      "domains": [
+        "wikipedia.org",
+        "medium.com",
+        "substack.com"
+      ]
+    },
+    "tier3": {
+      "label": "Unrated",
+      "description": "Discussion boards, social media, blogs, other wikis, anonymous sources. Never generate tension ratings. May surface as commentary layer only when anchored to Tier 1/2/community-verified source.",
+      "generatesRating": false,
+      "commentaryEligible": true,
+      "domains": [
+        "twitter.com",
+        "x.com",
+        "facebook.com",
+        "quora.com",
+        "reddit.com",
+        "tumblr.com"
+      ]
+    }
+  },
+  "topicCaveats": {
+    "description": "Known reliability caveats for specific sources on specific topic areas.",
+    "entries": []
+  }
+}
