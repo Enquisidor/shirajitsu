@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+.wxt/
+*.tsbuildinfo
+.turbo/
+.env
+.env.local
+.env.*.local
+*.pem
+.DS_Store
+coverage/
