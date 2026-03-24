@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
@@ -6,6 +6,9 @@ import { resolve } from 'path'
 // Each entrypoint gets its own output chunk — no shared runtime between background, content, and UI.
 
 export default defineConfig({
+  test: {
+    environment: 'jsdom',
+  },
   plugins: [react()],
   resolve: {
     alias: {
