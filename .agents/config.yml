@@ -1,0 +1,113 @@
+# Shirajitsu — agent persona configuration
+library_path: /Users/alexweinstein/Documents/Code/skyfly/app-dev-agents
+
+output_dir: ../.claude/agents/assembled
+
+orchestrator: true
+
+# ---------------------------------------------------------------------------
+# Feature pipeline agents
+# ---------------------------------------------------------------------------
+
+feature_agents:
+
+  po:
+    enabled: true
+    modules:
+      evaluation:
+        enabled: true
+
+  architect:
+    enabled: true
+    modules:
+      design-accuracy:
+        enabled: true
+        dimensions: [architectural]
+      evaluation:
+        enabled: true
+
+  qa:
+    enabled: true
+    modules:
+      evaluation:
+        enabled: true
+
+  test:
+    enabled: true
+    modules:
+      evaluation:
+        enabled: true
+
+  backend:
+    enabled: true
+    # No application database — Go services are stateless processors.
+    # Redis is used only for rate limiting. No database stack pack configured.
+    modules:
+      security:
+        enabled: true
+      performance:
+        enabled: true
+      design-accuracy:
+        enabled: true
+        dimensions: [architectural]
+      evaluation:
+        enabled: true
+
+  frontend:
+    enabled: true
+    stacks:
+      - spa-react       # React + Vite — covers both the Chrome extension and web app
+    modules:
+      security:
+        enabled: true
+      accessibility:
+        enabled: true
+      performance:
+        enabled: true
+      design-accuracy:
+        enabled: true
+        dimensions: [architectural]   # no Figma refs, visual fidelity not applicable
+      evaluation:
+        enabled: true
+
+  devops:
+    enabled: true
+    stacks:
+      - kubernetes      # Helm charts on GKE
+    modules:
+      security:
+        enabled: true
+      performance:
+        enabled: true
+      evaluation:
+        enabled: true
+
+# ---------------------------------------------------------------------------
+# Review pipeline agents
+# ---------------------------------------------------------------------------
+
+review_agents:
+  security: true
+  code-quality: true
+  accessibility: true
+  architectural-consistency: true
+  cicd: true
+  document-consistency: false    # disabled — no .spec/ artifacts yet
+  po-signoff: true
+
+# ---------------------------------------------------------------------------
+# Project settings
+# ---------------------------------------------------------------------------
+
+project:
+  prototype: false
+
+context:
+  task_sizes:
+    typical: medium
+    split_threshold: large
+
+settings:
+  auto_fix_permitted: false
+  wcag_target: AA
+  default_design_accuracy_dimensions: [architectural]
