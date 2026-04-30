@@ -295,10 +295,13 @@ Evaluates sources for a set of claims. For each claim, source-evaluator calls an
 **Notes:**
 - `claimIndex` is the 0-based index into the input `claims` array. Used by gateway to correlate results when forwarding to annotator.
 - `evaluatedClaims` has exactly one entry per input claim (same length as input `claims`). A claim with no search results returns an entry with `sources: []`.
-- `registryVersion` identifies which snapshot of `source-registry.json` was used. Must be returned to the client in `AnalyzeResponse`.
-- `accessible: false` means the source is paywalled or otherwise not directly surfaceable to users.
-- `summary` must not be empty for `tier1` and `tier2` sources. It may be empty for `community-verified` and `tier3`.
-- `commentaryItems` contains unverified public discussion found during search (e.g. Reddit, forums). Always labelled `"unverified-public-discussion"`.
+- `registryVersion` identifies which snapshot of `source-registry.json` was used. Hot-reloaded by source-evaluator on file change (no restart required).
+- `summary` is the raw search snippet / quote returned by the search API. Shown verbatim in the UI. AI summarisation is a future opt-in feature.
+- `accessible` determination:
+  1. Domain is on the static paywall list → `false`
+  2. Domain is not on the list → live HTTP HEAD check → result cached per domain
+  3. A background job re-checks all known domains weekly and updates the static list
+- `commentaryItems` are classified by domain type: known social/forum domains (reddit.com, twitter.com, etc.) are always commentary. Borderline cases default to `tier3` source, not commentary.
 
 #### Error Responses
 
@@ -307,8 +310,6 @@ Evaluates sources for a set of claims. For each claim, source-evaluator calls an
 | `400` | Malformed body or empty claims array |
 | `502` | Search API unavailable |
 | `500` | Internal error |
-
-> **Open — search provider:** The specific search API (Brave Search, SerpAPI, Google Custom Search, etc.) has not yet been selected. This decision affects the `SEARCH_PROVIDER` env var and the search client implementation, but not this contract's shape.
 
 ---
 
@@ -325,7 +326,9 @@ Evaluates sources for a set of claims. For each claim, source-evaluator calls an
 
 ### `POST /annotate`
 
-Assembles final `Annotation` objects from claims and their evaluated sources. Computes `AnnotationState` and `TensionRating` for each claim.
+Assembles final `Annotation` objects from claims and their evaluated sources. For each claim, makes a single LLM call that returns per-source `relevanceScore` and `divergenceScore`. These scores drive both the tension rating and display ordering.
+
+**Failure strategy:** If the LLM call fails for an individual claim, that claim's annotation is returned with `tensionRating: null` and `evaluationFailed: true`. The gateway still returns a 200 with all other annotations intact. The UI shows a retry affordance for failed claims; users re-run them via `POST /v1/evaluate-claim`.
 
 **Caller:** Gateway
 **No auth header** — internal network only.
@@ -383,23 +386,28 @@ Assembles final `Annotation` objects from claims and their evaluated sources. Co
 {
   "annotations": [
     {
-      "claim": {
-        "claimText": "string",
-        "charOffset": 0,
-        "charLength": 42,
-        "riskLevel": "high | medium | low",
-        "riskReasoning": "string",
-        "searchQuery": "string"
-      },
+      "claim": { "claimText": "string", "charOffset": 0, "charLength": 42, "riskLevel": "high | medium | low", "riskReasoning": "string", "searchQuery": "string" },
       "state": "sourced | limited | unverified",
       "tensionRating": {
         "numerator": 2,
         "denominator": 5,
         "label": "2 of 5 sources frame this differently"
       },
-      "sources": [...],
+      "sources": [
+        {
+          "url": "string",
+          "title": "string",
+          "tier": "tier1 | tier2 | community-verified | tier3",
+          "tierLabel": "string",
+          "summary": "string (raw search snippet)",
+          "accessible": true,
+          "relevanceScore": 0.87,
+          "divergenceScore": 0.72
+        }
+      ],
       "commentaryItems": [...],
-      "generatedAt": "2026-04-29T12:00:00Z"
+      "generatedAt": "2026-04-30T12:00:00Z",
+      "evaluationFailed": false
     }
   ],
   "usage": {
@@ -409,14 +417,38 @@ Assembles final `Annotation` objects from claims and their evaluated sources. Co
 }
 ```
 
+**LLM call per claim:** Annotator sends claim text + all source summaries (quotes) to the LLM in a single call. The LLM returns structured output — one entry per source:
+```json
+{ "sourceIndex": 0, "relevanceScore": 0.87, "divergenceScore": 0.72 }
+```
+
+**Tension score computation (annotator, after LLM call):**
+```
+tensionScore = Σ(divergenceScore[i] × relevanceScore[i])  for Tier 1/2 sources
+             ─────────────────────────────────────────────
+                        Σ(relevanceScore[i])
+```
+Weighted mean: a high-relevance source that diverges pulls the score harder than a peripheral one. Result is always 0.0–1.0.
+
+**Tension label ranges** (for accessibility — shown on hover, never as a verdict):
+- 0.00–0.25 → "Sources largely frame this consistently"
+- 0.25–0.50 → "Sources show some variation in framing"
+- 0.50–0.75 → "Sources show notable framing differences"
+- 0.75–1.00 → "Sources show substantial framing differences"
+
+**UI colour mapping:** `tensionRating.score` maps to a blue→red gradient displayed on the claim bubble and inline highlights. 0.0 = blue, 0.5 = purple, 1.0 = red. No binary threshold — the colour IS the signal.
+
 **Invariants:**
 - `annotations` has exactly one entry per input claim (same order as `claims`).
-- `tensionRating` is `null` when no Tier 1 or Tier 2 sources are present for a claim.
-- `tensionRating.denominator` = count of sources where `tier` is `tier1` or `tier2`.
-- `tensionRating.numerator` = count of those sources that frame the claim differently, determined by a single LLM call per claim: annotator sends the claim text + all Tier 1/2 source summaries to an LLM and asks it to identify which sources frame the claim differently. The LLM returns a boolean per source. Annotator sums the `true` values.
-- `tensionRating.label` must use the form `"X of Y sources frame this differently"`.
-- `state` is computed by `DetermineState(sources)` — sourced if any accessible Tier 1/2 source; limited if only inaccessible Tier 1/2; unverified if none.
-- `generatedAt` is the ISO timestamp set by annotator at assembly time.
+- `relevanceScore`: 0.0–1.0 for all sources. Used for display ordering (sources sorted descending by relevance).
+- `divergenceScore`: 0.0–1.0 for Tier 1/2 sources only; `null` for community-verified and tier3.
+- `tensionRating.score`: weighted mean divergence across all Tier 1/2 sources (0.0–1.0).
+- `tensionRating.sourceCount`: count of Tier 1/2 sources the score is based on.
+- `tensionRating` is `null` when `sourceCount = 0` or when `evaluationFailed: true`.
+- Tension label language is always hedged — never "contradicts", "false", or "verdict".
+- `state` computed by `DetermineState(sources)` — sourced if any accessible Tier 1/2; limited if only inaccessible Tier 1/2; unverified if none.
+- `evaluationFailed: true` when the LLM call for this claim failed. Other fields populated from source-evaluator results where possible.
+- `generatedAt` is set by annotator at assembly time.
 
 #### Error Responses
 
@@ -436,7 +468,67 @@ Assembles final `Annotation` objects from claims and their evaluated sources. Co
 
 ---
 
-## 5. External API: Per-Claim Re-Evaluate
+## 5. External API: Claim Feedback
+
+### `POST /v1/claim-feedback`
+
+Saves user feedback for one or more claims in an analysis. Handles both single-bubble SAVE and the sidebar's Save All button — both use this same endpoint with one or more items in `feedback`.
+
+**Auth:** same as `/v1/analyze`.
+
+#### Request Body
+
+```json
+{
+  "analysisId": "uuid-v4",
+  "feedback": [
+    { "claimCharOffset": 142, "markedAsOpinion": true },
+    { "claimCharOffset": 287, "markedAsOpinion": false }
+  ]
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `analysisId` | string | Yes | UUID from the original `AnalyzeResponse`. |
+| `feedback` | array | Yes | One entry per claim being saved. Minimum 1. |
+| `feedback[].claimCharOffset` | number | Yes | `charOffset` of the claim — uniquely identifies it within the analysis. |
+| `feedback[].markedAsOpinion` | boolean | Yes | `true` = user marked this as an opinion/rhetorical statement; `false` = un-marked (checkbox unchecked after a prior save). |
+
+#### Response `204 No Content`
+
+No body. The UI updates checkbox state optimistically before the request completes and reconciles on 204.
+
+`analysisId` is a correlation ID only — analyses are not persisted server-side. The feedback is appended to a training log keyed by user ID; no lookup of the original analysis occurs. There is no 404.
+
+#### Error Responses
+
+| Status | `code` | Meaning |
+|---|---|---|
+| `400` | `invalid_request` | Missing fields or empty `feedback` array |
+| `401` | `unauthorized` | Missing or invalid auth |
+
+---
+
+### UI Behaviour: Pre-Save Highlighting and Save All
+
+**Dirty state tracking (client-side):** Each claim bubble independently tracks two states — `savedState` (what was last successfully POSTed) and `pendingState` (current checkbox value). When they differ, the bubble is *dirty*.
+
+**Dirty bubble treatment:**
+- The "Mark as opinion" checkbox row gets an amber left border and a muted "unsaved" label
+- The per-bubble SAVE button becomes visually active (full colour, not greyed)
+
+**Save All button:**
+- Appears as a sticky footer in the annotation sidebar whenever ≥ 1 bubble is dirty
+- Label: `Save all (N)` where N is the count of dirty claims
+- Clicking it collects all dirty claims into a single `POST /v1/claim-feedback` with the full `feedback` array, then clears dirty state for all of them on 204
+- After a successful Save All, the sticky footer disappears
+
+**Optimistic updates:** Both SAVE and Save All update `savedState` immediately on click (before the network response). On error, roll back `pendingState` to `savedState` and show an inline error.
+
+---
+
+## 6. External API: Per-Claim Re-Evaluate
 
 ### `POST /v1/evaluate-claim`
 
@@ -520,11 +612,27 @@ Same error codes as `/v1/analyze`.
 
 ---
 
-## 7. Open Decisions
+## 8. Resolved Decisions
+
+| # | Decision |
+|---|---|
+| 1 | Default search provider: `google-cse`. User supplies their own API key. |
+| 2 | Max claims per request: **20**. Claim-extractor truncates after 20 with no error — excess claims silently dropped. |
+| 3 | LLM failure strategy: fail as few analyses as possible. Annotator LLM failure per claim → `evaluationFailed: true`, `tensionRating: null`. Claim-extractor LLM failure → 502 (cannot extract claims at all; nothing to return). |
+| 4 | Source summaries: raw search snippet (quote). LLM rates relevance but does not rewrite. AI summarisation is a future opt-in. |
+| 5 | Paywall detection: static domain list → live HEAD check if absent → weekly background re-check of all known domains. |
+| 6 | CommentaryItem classification: domain-based (known social/forum domains). Borderline → tier3 source. |
+| 7 | API key storage: **Clerk user metadata (encrypted)** for v1. Limitations: no key rotation, no audit log, size-limited. Re-evaluate when usage grows. |
+| 8 | Tension is a score: annotator LLM returns `divergenceScore: 0.0–1.0` per Tier 1/2 source. `numerator` = count where score ≥ 0.5. Score surfaced per-source for UI display. |
+| 9 | Writer vs reader: identical pipeline for v1. UI framing differs (advisory tone for writer, informational for reader). Cross-document tension is a future milestone. |
+| 10 | Extension auth: Clerk OAuth popup via `@clerk/chrome-extension`. User never pastes a token. |
+| 11 | Source registry: hot-reloaded by source-evaluator on file change (Go `fsnotify`). No restart required. Manual PR to update registry; no automated crawl for v1. |
+| 12 | Feedback: learning signal only. `analysisId` is a correlation ID; no server-side persistence of analyses. |
+
+## 9. Remaining Open Items
 
 | # | Question | Blocking |
 |---|---|---|
-| 1 | ~~Which search provider to default to?~~ Default is `google-cse`. User must supply their own Google CSE API key. | Resolved 2026-04-29 |
-| 2 | Max claims per request — is there a hard cap? | claim-extractor implementation |
-| 3 | LLM failure strategy in claim-extractor — retry with fallback provider or fail-fast? | claim-extractor implementation |
-| 4 | What additional controls belong in the claim bubble beyond model + search provider? | claim bubble UI implementation |
+| 1 | ~~`divergenceScore` threshold~~ — resolved: no threshold. Tension is a continuous weighted-mean score (0.0–1.0) displayed as a blue→red gradient. | Resolved. |
+| 2 | ~~Commentary domain list~~ — resolved: reddit.com, twitter.com, x.com, facebook.com, threads.net, instagram.com, tiktok.com, quora.com, news.ycombinator.com, linkedin.com, tumblr.com, pinterest.com, youtube.com. Medium/Substack/blogs → tier3, not commentary. | Resolved. |
+| 3 | ~~Training pipeline~~ — resolved: phased. v1: append feedback to structured log (BigQuery/Firestore). Near-term: DSPy prompt optimisation against labeled log. Later: SFT at ~1,000+ examples. RLHF deferred indefinitely. | Resolved. |
