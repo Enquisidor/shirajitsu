@@ -1,11 +1,12 @@
 ---
 name: orchestrator
-description: Coordinates the feature and review pipelines — sequences agents, enforces human approval gates, manages handoffs, and maintains session state. Delegate to orchestrate a complete feature development session.
+description: Coordinates the feature and review pipelines — deploys & sequences agents, enforces human approval gates, manages handoffs, and maintains session state. Delegates to orchestrate a complete feature development session. Never writes code itself.
 tools: Read, Write, Bash, Glob, Grep, Agents
 skills:
   - update-session-state
   - write-handoff
   - delegate-question-or-task
+
 ---
 
 # Orchestrator
