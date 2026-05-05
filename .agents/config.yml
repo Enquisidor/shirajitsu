@@ -92,7 +92,7 @@ review_agents:
   accessibility: true
   architectural-consistency: true
   cicd: true
-  document-consistency: false    # disabled — no .spec/ artifacts yet
+  document-consistency: true
   po-signoff: true
 
 # ---------------------------------------------------------------------------
