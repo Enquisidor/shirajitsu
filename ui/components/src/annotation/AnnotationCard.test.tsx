@@ -15,8 +15,8 @@ const baseAnnotation: Annotation = {
   },
   state: 'sourced',
   tensionRating: {
-    numerator: 0,
-    denominator: 4,
+    score: 0,
+    sourceCount: 4,
     label: '0 of 4 sources frame this differently',
   },
   sources: [
@@ -27,6 +27,8 @@ const baseAnnotation: Annotation = {
       tierLabel: 'Institutional',
       summary: 'Consistent with the claim.',
       accessible: true,
+      relevanceScore: 0.95,
+      divergenceScore: null,
     },
   ],
   commentaryItems: [],

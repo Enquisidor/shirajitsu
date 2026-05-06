@@ -6,6 +6,20 @@ const mockResponse: AnalyzeResponse = {
   analysisId: 'test-123',
   registryVersion: '1.0.0',
   annotations: [],
+  failedClaims: [],
+  sessionStats: {
+    claimsExtracted: 0,
+    sourcesEvaluated: 0,
+    llmCalls: 0,
+    tokens: { inputTokens: 0, outputTokens: 0 },
+    model: {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-20250514',
+      label: 'Claude Sonnet 4',
+      description: 'Anthropic — strong reasoning, recommended default',
+    },
+    searchProvider: 'google-cse',
+  },
 }
 
 beforeEach(() => {
