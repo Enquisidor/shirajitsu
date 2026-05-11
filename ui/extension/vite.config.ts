@@ -10,13 +10,17 @@ export default defineConfig({
     environment: 'jsdom',
   },
   plugins: [react()],
+  // root=src so HTML entrypoints output at popup/index.html and sidepanel/index.html
+  // (without src/ prefix), matching the paths declared in public/manifest.json.
+  root: resolve(__dirname, 'src'),
+  publicDir: resolve(__dirname, 'public'),
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
     rollupOptions: {
       input: {
