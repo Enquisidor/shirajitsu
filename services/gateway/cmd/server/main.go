@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/shirajitsu/gateway/internal/auth"
 	"github.com/shirajitsu/gateway/internal/handlers"
+	"github.com/shirajitsu/gateway/internal/pipeline"
 	"github.com/shirajitsu/gateway/internal/ratelimit"
 )
 
@@ -18,6 +19,12 @@ func main() {
 	redisAddr := env("REDIS_ADDR", "localhost:6379")
 	limiter := ratelimit.NewRedisLimiter(redisAddr, logger)
 
+	claimExtractorURL := env("CLAIM_EXTRACTOR_URL", "http://localhost:8081")
+	sourceEvaluatorURL := env("SOURCE_EVALUATOR_URL", "http://localhost:8082")
+	annotatorURL := env("ANNOTATOR_URL", "http://localhost:8083")
+
+	p := pipeline.New(claimExtractorURL, sourceEvaluatorURL, annotatorURL)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -25,7 +32,7 @@ func main() {
 	r.Use(auth.Middleware(logger))
 	r.Use(ratelimit.Middleware(limiter, logger))
 
-	r.Post("/v1/analyze", handlers.Analyze(logger))
+	r.Post("/v1/analyze", handlers.Analyze(logger, p))
 	r.Get("/healthz", handlers.Healthz)
 
 	addr := env("PORT", "8080")

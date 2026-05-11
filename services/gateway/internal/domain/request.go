@@ -20,6 +20,7 @@ type AIModel struct {
 type AnalyzeRequest struct {
 	Text           string
 	Context        Context
+	SearchProvider string   // optional; forwarded to source-evaluator
 	PlatformUserID string   // hashed; empty for user-JWT auth
 	Model          *AIModel // nil = use the claim-extractor's configured default
 }
