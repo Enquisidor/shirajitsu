@@ -9,9 +9,27 @@ export function Sidebar() {
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    chrome.runtime.onMessage.addListener((message) => {
+    // On mount, read session storage first to catch any state that arrived
+    // before the sidebar mounted (race between sidePanel.open() and React hydration).
+    chrome.storage.session.get(['shirajitsu_state', 'shirajitsu_error', 'shirajitsu_annotations'], (stored) => {
+      const state = stored.shirajitsu_state as string | undefined
+      if (state === 'analyzing') setStatus('analyzing')
+      if (state === 'error') {
+        setErrorMsg((stored.shirajitsu_error as string) ?? 'Unknown error')
+        setStatus('error')
+      }
+      if (state === 'done') {
+        try {
+          const annotations = JSON.parse((stored.shirajitsu_annotations as string) ?? '[]') as Annotation[]
+          setAnnotations(annotations)
+        } catch { /* ignore malformed */ }
+        setStatus('done')
+      }
+    })
+
+    function listener(message: { type: string; payload?: { annotations?: Annotation[]; error?: string } }) {
       if (message.type === 'SHOW_ANNOTATIONS') {
-        setAnnotations(message.payload.annotations as Annotation[])
+        setAnnotations((message.payload?.annotations ?? []) as Annotation[])
         setErrorMsg('')
         setStatus('done')
       }
@@ -20,10 +38,13 @@ export function Sidebar() {
         setStatus('analyzing')
       }
       if (message.type === 'SHOW_ERROR') {
-        setErrorMsg(message.payload.error as string)
+        setErrorMsg((message.payload?.error ?? 'Unknown error') as string)
         setStatus('error')
       }
-    })
+    }
+
+    chrome.runtime.onMessage.addListener(listener)
+    return () => chrome.runtime.onMessage.removeListener(listener)
   }, [])
 
   function toggleExpand(offset: number) {

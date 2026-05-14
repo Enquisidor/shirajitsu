@@ -4,6 +4,12 @@ import type { AIModel, UserSettings } from '@shirajitsu/types'
 import { DEFAULT_USER_SETTINGS } from '@shirajitsu/types'
 import { ModelSelector } from '@shirajitsu/react'
 
+function safeBroadcast(message: Record<string, unknown>): void {
+  chrome.runtime.sendMessage(message, () => {
+    void chrome.runtime.lastError
+  })
+}
+
 export function Popup() {
   const [context, setContext] = useState<DetectedContext | null>(null)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
@@ -37,8 +43,8 @@ export function Popup() {
   function broadcastError(msg: string) {
     setStatus('error')
     setErrorMsg(msg)
-    // Broadcast to sidebar (which listens on chrome.runtime.onMessage)
-    chrome.runtime.sendMessage({ type: 'SHOW_ERROR', payload: { error: msg } })
+    chrome.storage.session.set({ shirajitsu_state: 'error', shirajitsu_error: msg })
+    safeBroadcast({ type: 'SHOW_ERROR', payload: { error: msg } })
   }
 
   async function handleAnalyze() {
@@ -51,10 +57,14 @@ export function Popup() {
       return
     }
 
+    // Persist pending state before opening sidepanel so the sidebar can read it
+    // on mount even if it loads after the message has been sent.
+    await chrome.storage.session.set({ shirajitsu_state: 'analyzing', shirajitsu_error: null, shirajitsu_annotations: null })
+
     // Open the sidepanel and signal it that analysis is starting, so it is
     // open and listening before any result or error message is broadcast.
     chrome.sidePanel.open({ tabId: tab.id })
-    chrome.runtime.sendMessage({ type: 'ANALYSIS_STARTED' })
+    safeBroadcast({ type: 'ANALYSIS_STARTED' })
 
     chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, (res) => {
       // Check for messaging errors first (content script not injected, chrome:// page, etc.)
@@ -79,13 +89,15 @@ export function Popup() {
       }
 
       setStatus('done')
+      // Persist completed state so sidebar can recover it on mount
+      chrome.storage.session.set({ shirajitsu_state: 'done', shirajitsu_annotations: JSON.stringify(res.annotations) })
       // Forward annotations to content script (handles inline highlight mode)
       // and to sidebar via runtime broadcast
       chrome.tabs.sendMessage(tab.id!, {
         type: 'SHOW_ANNOTATIONS',
         payload: { annotations: res.annotations, settings },
       })
-      chrome.runtime.sendMessage({
+      safeBroadcast({
         type: 'SHOW_ANNOTATIONS',
         payload: { annotations: res.annotations, settings },
       })
