@@ -12,7 +12,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'RUN_ANALYSIS') {
-    runAnalysis().then(sendResponse)
+    runAnalysis().then(sendResponse).catch((err: unknown) => {
+      sendResponse({ error: String(err) })
+    })
     return true
   }
 
@@ -36,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false
 })
 
-async function runAnalysis() {
+async function runAnalysis(): Promise<{ error: string } | AnalyzeResponse> {
   const { text } = extractText(context.mode, context.editorType)
   if (!text.trim()) return { error: 'No text found to analyze.' }
 
@@ -46,5 +48,20 @@ async function runAnalysis() {
     context: context.mode,
     model: settings.selectedModel as AIModel | undefined,
   }
-  return chrome.runtime.sendMessage({ type: 'ANALYZE_TEXT', payload: request })
+
+  // Use the callback form of chrome.runtime.sendMessage rather than the Promise
+  // form. In MV3 service-worker environments the Promise-based form can resolve
+  // with undefined when the SW is cold or when sendResponse is called
+  // asynchronously, silently discarding the actual response value. The callback
+  // form always delivers the response exactly as sendResponse received it, and
+  // populates chrome.runtime.lastError when the channel is closed without a reply.
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: 'ANALYZE_TEXT', payload: request }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message ?? 'Background script did not respond.'))
+        return
+      }
+      resolve(response as AnalyzeResponse | { error: string })
+    })
+  })
 }

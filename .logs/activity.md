@@ -125,3 +125,52 @@
 - `role="alert"` on the sidebar error paragraph: this is a live region that will be announced immediately by screen readers when it appears — appropriate for an error condition.
 
 **Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: extension-messaging-bug-fix
+
+**Agent:** Frontend Engineer (focused invocation via orchestrator)
+**Task ID:** extension-messaging-bug-fix
+**Status:** Completed
+**Date:** 2026-05-11
+
+**Task description:** Debug and fix the remaining two bugs in the Chrome extension messaging chain after commit 6c4e851 — popup shows "Analysis complete" immediately (no "Analyzing…" state visible, wrong terminal state), and the sidebar stays stuck at idle even on errors.
+
+**Inputs received:**
+- Bug report (inline): popup immediately shows "Analysis complete — see sidebar"; sidebar stays at idle
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — open sidepanel and send ANALYSIS_STARTED before dispatching RUN_ANALYSIS; split chrome.runtime.lastError and res === undefined guards; add null guard
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts` — replace Promise form of chrome.runtime.sendMessage with callback form wrapped in new Promise; add explicit .catch() on runAnalysis().then(sendResponse); add explicit return type annotation
+
+**Root causes identified:**
+
+Bug 1 (sidebar stays idle — primary bug): The sidepanel page only receives `chrome.runtime` messages while it is open. If the user clicks "Analyze this page" without the sidebar open, `SHOW_ERROR` is broadcast into the void — no listener exists to receive it. The previous fix (DEC-006) correctly changed the channel from `chrome.tabs.sendMessage` to `chrome.runtime.sendMessage`, but did not ensure the sidebar was actually open before broadcasting. Fix: open the sidepanel and send `ANALYSIS_STARTED` at the START of `handleAnalyze`, before initiating the analysis pipeline, so the sidebar is open and listening by the time any result or error is broadcast.
+
+Bug 2 (content-script → background communication reliability): In some Chrome MV3 environments, the Promise form of `chrome.runtime.sendMessage` in a content script resolves with `undefined` when the background service worker calls `sendResponse` asynchronously (inside a `.then()`). This causes `runAnalysis()` to resolve with `undefined`, and `sendResponse(undefined)` is called to the popup. Additionally, if the background service worker is cold and rejects the message, `runAnalysis().then(sendResponse)` had no `.catch()`, so the rejection was unhandled and `sendResponse` was never called — leaving the popup stuck in `analyzing` indefinitely. Fix: use the callback form of `chrome.runtime.sendMessage` (wrapped in a `new Promise`) which reliably delivers the `sendResponse` value and surfaces errors via `chrome.runtime.lastError`. Add `.catch()` to `runAnalysis().then(sendResponse)` to handle any remaining rejection.
+
+**Self-checks applied:**
+- Security: Error messages come from `chrome.runtime.lastError.message` (browser-controlled) or from the background handler (not from page content). No user-controlled strings are inserted into the DOM unsanitized. No new dependencies.
+- Accessibility: No change to rendered output or ARIA structure. Error rendering unchanged from prior fix.
+- Performance: Opening the sidepanel at the start of handleAnalyze adds one `chrome.sidePanel.open` call and one `chrome.runtime.sendMessage` per analyze click — negligible overhead. No memoization needed.
+- Design accuracy (architectural): No new message types introduced. ANALYSIS_STARTED was already handled by Sidebar.tsx. The callback form of `chrome.runtime.sendMessage` is functionally equivalent from the caller's perspective.
+- Change impact: Changes are scoped to two files. No shared component interfaces changed. No new message types introduced (ANALYSIS_STARTED and SHOW_ERROR were already defined).
+
+**Build result:** `pnpm --filter @shirajitsu/extension build` — PASS (tsc + vite, 0 errors)
+**Test result:** `pnpm --filter @shirajitsu/extension test` — 6/6 PASS
+
+**Decisions made:**
+- Open sidepanel and send ANALYSIS_STARTED at the start of handleAnalyze — DEC-007
+- Use callback form of chrome.runtime.sendMessage in content script — DEC-008
+
+**Assumptions made:**
+- The sidepanel page finishes loading and registering its onMessage listener within the time it takes the analysis pipeline to complete (claim extraction + source evaluation + annotation). For an LLM-based pipeline, this duration is measured in seconds. The sidepanel React app loads in under 100ms. This assumption holds for the intended production use case.
+- The `chrome.sidePanel.open` call in handleAnalyze does not throw when called from a popup context. Per Chrome MV3 documentation, `sidePanel.open` is permitted from popup action contexts and requires the `sidePanel` permission, which is declared in `public/manifest.json`.
+
+**Issues flagged:** None at P2 or above.

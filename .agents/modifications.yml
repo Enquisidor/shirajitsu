@@ -4,7 +4,7 @@
 # The configurator reads this file in Step 0d and offers to re-apply on rebuild.
 
 version: 1
-generated: "2026-05-08T19:00:00Z"
+generated: "2026-05-14T00:00:00Z"
 library_path: /Users/alexweinstein/Documents/Code/skyfly/app-dev-agents
 
 project:

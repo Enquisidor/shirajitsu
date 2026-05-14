@@ -38,7 +38,7 @@ The message asks for domain artifacts or domain decisions — anything that woul
 | Write spec files, domain model, bounded context definitions, glossary | Architect |
 | Define a test strategy, coverage requirements, test plan | QA Strategist |
 | Write infrastructure code, CI/CD pipelines, deployment config | DevOps Engineer |
-| Answer a question about code, architecture, security, testing, UX | Use `delegate-question-or-task` |
+| Answer a question about code, architecture, security, testing, UX | Use `delegate-on-message` |
 
 **The phrasing does not matter.** "Can you write a login endpoint?" and "Write a login endpoint" and "We need a login endpoint" are all domain requests and all require delegation.
 
@@ -83,4 +83,4 @@ Return one short clarifying question. Do not attempt any domain work or orchestr
 
 ## What this skill is not
 
-This skill does not replace `delegate-question-or-task`. That skill handles ongoing mid-session domain questions during normal orchestration flow. This skill is the mandatory first-pass gate that fires before the orchestrator processes any message at all — including messages that arrive during active pipeline phases.
+This skill does not replace `delegate-on-message`. That skill handles ongoing mid-session domain questions during normal orchestration flow. This skill is the mandatory first-pass gate that fires before the orchestrator processes any message at all — including messages that arrive during active pipeline phases.

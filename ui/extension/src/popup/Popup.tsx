@@ -44,16 +44,32 @@ export function Popup() {
   async function handleAnalyze() {
     setStatus('analyzing')
     setErrorMsg('')
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (!tab?.id) return
+    if (!tab?.id) {
+      broadcastError('Could not determine the active tab.')
+      return
+    }
+
+    // Open the sidepanel and signal it that analysis is starting, so it is
+    // open and listening before any result or error message is broadcast.
+    chrome.sidePanel.open({ tabId: tab.id })
+    chrome.runtime.sendMessage({ type: 'ANALYSIS_STARTED' })
 
     chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, (res) => {
       // Check for messaging errors first (content script not injected, chrome:// page, etc.)
-      if (chrome.runtime.lastError || res === undefined) {
-        const msg =
-          chrome.runtime.lastError?.message ??
-          'Could not reach the page. Try reloading the tab and clicking Analyze again.'
-        broadcastError(msg)
+      if (chrome.runtime.lastError) {
+        broadcastError(
+          chrome.runtime.lastError.message ??
+            'Could not reach the page. Try reloading the tab and clicking Analyze again.',
+        )
+        return
+      }
+
+      // res may be undefined if the content script called sendResponse(undefined) or if the
+      // port was closed without a response (e.g. service-worker cold-start race).
+      if (res === undefined || res === null) {
+        broadcastError('Could not reach the page. Try reloading the tab and clicking Analyze again.')
         return
       }
 
@@ -73,7 +89,6 @@ export function Popup() {
         type: 'SHOW_ANNOTATIONS',
         payload: { annotations: res.annotations, settings },
       })
-      chrome.sidePanel.open({ tabId: tab.id! })
     })
   }
 

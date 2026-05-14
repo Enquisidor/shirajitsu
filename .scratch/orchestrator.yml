@@ -1,9 +1,9 @@
 agent: orchestrator
 session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-11T15:29:00Z"
+last_updated: "2026-05-11T16:15:00Z"
 status: active
 
-current_task: extension-error-visibility-fix — complete; awaiting commit and push
+current_task: extension-messaging-bug-fix — complete; awaiting commit
 
 tasks:
   status-audit:
@@ -178,6 +178,27 @@ tasks:
                SHOW_ERROR handler in Sidebar; sidebar__error CSS rule; runtime broadcast for sidebar.
       Decision DEC-006 logged: popup-to-sidebar channel must use chrome.runtime.sendMessage.
       Commit and push: PENDING (user requested)
+
+  extension-messaging-bug-fix:
+    description: Debug and fix remaining popup/sidebar messaging failure — popup shows done immediately; sidebar stays idle after commit 6c4e851
+    status: complete
+    started_at: "2026-05-11T16:00:00Z"
+    completed_at: "2026-05-11T16:15:00Z"
+    output: null
+    notes: |
+      Root cause 1 (sidebar stays idle): sidepanel not open when SHOW_ERROR is broadcast.
+        Fix: open sidepanel + send ANALYSIS_STARTED at START of handleAnalyze, before RUN_ANALYSIS.
+      Root cause 2 (unreliable content→background messaging): Promise form of
+        chrome.runtime.sendMessage resolves undefined in some MV3 environments when
+        background calls sendResponse asynchronously; no .catch() on runAnalysis().then(sendResponse)
+        left popup stuck on cold SW rejection.
+        Fix: callback form wrapped in new Promise in runAnalysis(); .catch() added.
+      Files changed:
+        - ui/extension/src/popup/Popup.tsx
+        - ui/extension/src/content/index.ts
+      Build: PASS (tsc + vite, 0 errors)
+      Tests: 6/6 PASS
+      Decisions: DEC-007, DEC-008
 
 blockers:
   - description: |

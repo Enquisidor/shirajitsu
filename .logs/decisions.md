@@ -117,3 +117,44 @@
 **Decision made:** Option 2. `chrome.runtime.sendMessage` is the standard MV3 channel for popup-to-sidebar communication and requires no additional infrastructure.
 
 **PM/Tech Lead review required:** No
+
+---
+
+## DEC-007
+
+**Date:** 2026-05-11
+**Agent:** Frontend Engineer
+**Task:** extension-messaging-bug-fix
+
+**Decision:** Open the sidepanel and send ANALYSIS_STARTED before dispatching RUN_ANALYSIS to the content script
+
+**Context:** The sidepanel (sidebar) is a separate extension page that only receives `chrome.runtime` messages while it is open and actively listening. If the user clicks "Analyze this page" without the sidepanel open, any `SHOW_ERROR` or `SHOW_ANNOTATIONS` broadcast fires into the void — the sidebar never receives it and stays stuck in idle state. The fix is to open the sidepanel and signal it that analysis has begun before the content script pipeline starts, guaranteeing that the sidebar is open and its listener is registered before any result or error message is broadcast.
+
+**Options considered:**
+1. Open the sidepanel and broadcast ANALYSIS_STARTED at the END of handleAnalyze (just before broadcasting error/done) — sidepanel may still miss SHOW_ERROR because the sidepanel page may not have finished loading in time.
+2. Open the sidepanel and broadcast ANALYSIS_STARTED at the START of handleAnalyze (before RUN_ANALYSIS is sent to content script) — sidepanel has the entire duration of the analysis pipeline to load and register its listener. This is the safe ordering.
+3. Store last error/status in the background SW and let the sidebar fetch it on load — more robust but significantly more complex; adds a background relay and a query protocol.
+
+**Decision made:** Option 2. Opening the sidepanel at the start of handleAnalyze gives the sidebar page the full time of the async pipeline to load and register its listener, which is sufficient. Option 3 would be necessary only if the analysis completes in under ~50ms (sidepanel load time), which is not realistic for an LLM pipeline call.
+
+**PM/Tech Lead review required:** No
+
+---
+
+## DEC-008
+
+**Date:** 2026-05-11
+**Agent:** Frontend Engineer
+**Task:** extension-messaging-bug-fix
+
+**Decision:** Use the callback form of chrome.runtime.sendMessage in the content script rather than the Promise form
+
+**Context:** In MV3 background service worker environments, `chrome.runtime.sendMessage` called from a content script returns a Promise. When the background listener calls `sendResponse` asynchronously (inside a `Promise.then`), Chrome in some versions resolves the content script's Promise with `undefined` rather than the actual response value — silently discarding the auth error returned by `handleAnalyze`. This causes `runAnalysis()` to resolve with `undefined`, `sendResponse(undefined)` is called in the content script, and the popup callback receives `res = undefined`. While the `res === undefined` guard in the popup should catch this, there is also the case where `chrome.runtime.sendMessage` rejects entirely (service worker cold-start) — with no `.catch()` on `runAnalysis().then(sendResponse)`, the rejection is unhandled and `sendResponse` is never called, leaving the popup stuck in `analyzing` forever. The callback form of `chrome.runtime.sendMessage` avoids both problems: it always delivers the response value exactly as passed to `sendResponse`, and it sets `chrome.runtime.lastError` when the channel closes without a reply.
+
+**Options considered:**
+1. Keep the Promise form (`return chrome.runtime.sendMessage(...)`) and add a `.catch()` to `runAnalysis()` — handles the rejection case but does not fix the `undefined` resolution case.
+2. Use the callback form wrapped in `new Promise()` — handles both cases: response is delivered reliably, and errors are surfaced via `chrome.runtime.lastError` inside the callback and then as a rejection of the outer Promise.
+
+**Decision made:** Option 2. The callback form is more reliable across Chrome MV3 versions for content-script-to-background communication where an async `sendResponse` is involved. The outer `new Promise` wrapper maintains the async function signature expected by `runAnalysis().then(sendResponse)`.
+
+**PM/Tech Lead review required:** No
