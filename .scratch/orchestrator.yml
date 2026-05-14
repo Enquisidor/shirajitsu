@@ -1,9 +1,9 @@
 agent: orchestrator
 session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-11T16:15:00Z"
+last_updated: "2026-05-11T17:00:00Z"
 status: active
 
-current_task: extension-messaging-bug-fix — complete; awaiting commit
+current_task: extension-sidebar-race-condition-fix — diagnosing MV3 messaging race; delegating to Frontend Engineer
 
 tasks:
   status-audit:
@@ -199,6 +199,25 @@ tasks:
       Build: PASS (tsc + vite, 0 errors)
       Tests: 6/6 PASS
       Decisions: DEC-007, DEC-008
+
+  extension-sidebar-race-condition-fix:
+    description: >
+      Fix MV3 race condition — sidepanel not loaded before ANALYSIS_STARTED broadcast,
+      causing "Could not establish connection. Receiving end does not exist." error.
+      Root causes: (1) sidePanel.open() not awaited before sendMessage; (2) chrome.runtime.sendMessage
+      calls to sidebar not guarded when sidebar is closed; (3) sidebar reads state only from
+      runtime messages, missing messages sent before React mount.
+    status: in-progress
+    started_at: "2026-05-11T17:00:00Z"
+    completed_at: null
+    output: null
+    notes: |
+      Fix strategy: use chrome.storage.session as source of truth written by popup,
+      read by sidebar on mount. Wrap all popup→sidebar chrome.runtime.sendMessage calls
+      in safeBroadcast() that suppresses "Receiving end does not exist". Add onMessage
+      cleanup in Sidebar useEffect.
+      Files to change: ui/extension/src/popup/Popup.tsx, ui/extension/src/sidebar/Sidebar.tsx
+      Files NOT to change: content/index.ts, background/index.ts, manifest.json, any test files.
 
 blockers:
   - description: |
