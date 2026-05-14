@@ -87,3 +87,41 @@
 
 **Issues flagged:**
 - The `github.com/clerk/clerk-sdk-go/v2` package is declared in `go.mod` but is not present in the local Go module cache. Running `go mod tidy` will require network access to download it. Until this is done, `go build ./...` and `go test ./...` will fail with a missing module error. This is a P2 infrastructure blocker for gate verification.
+
+---
+
+## Entry: extension-error-visibility-fix
+
+**Agent:** Frontend Engineer (focused invocation via orchestrator)
+**Date:** 2026-05-11
+**Task:** Fix silent failure in Chrome extension — make errors visible end-to-end (popup + sidebar)
+
+**Files changed:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/styles/sidebar.css`
+
+**Summary of changes:**
+
+1. `Popup.tsx` — `handleAnalyze()`: Added `chrome.runtime.lastError` check after `chrome.tabs.sendMessage`. Added guard for `res === undefined` (content script not injected, e.g. on a chrome:// page). Both conditions now produce a user-visible error message in the popup rather than a silent TypeError crash. Extracted `broadcastError()` helper that sets popup error state and calls `chrome.runtime.sendMessage({ type: 'SHOW_ERROR' })` to forward the error to the sidebar. Also patched the `GET_CONTEXT` callback in `useEffect` to guard `chrome.runtime.lastError`. Also added a parallel `chrome.runtime.sendMessage` broadcast for `SHOW_ANNOTATIONS` so the sidebar receives it (sidebar listens on `chrome.runtime.onMessage`; `chrome.tabs.sendMessage` only reaches content scripts).
+
+2. `Sidebar.tsx`: Added `'error'` to the `status` state union. Added `errorMsg` state. Added handler for `message.type === 'SHOW_ERROR'`. Rendered a `<p className="sidebar__error" role="alert">` when status is `'error'`. Scoped the annotation card render to `status === 'done'` only.
+
+3. `sidebar.css`: Added `.sidebar__error` rule — same sizing and padding as `.sidebar__empty`, color set to `var(--color-risk-high)`.
+
+**Self-checks applied:**
+- Security: No user-controlled content is inserted via innerHTML or dangerouslySetInnerHTML. Error messages come from `chrome.runtime.lastError.message` (browser-controlled) or from the extension's own background handler (not from page content). Tokens not logged. No new dependencies.
+- Accessibility: Error paragraph uses `role="alert"` so screen readers announce it when it appears. Color is not the sole indicator — text content conveys the error. Contrast ratio of `--color-risk-high` (#E63946) against white background is ~4.6:1, meeting AA.
+- Performance: No new renders, no new requests. `broadcastError` is called at most once per analyze click. No memoization needed.
+- Design accuracy (architectural): Component names and state variable names match domain and existing conventions. No new components introduced. Error state follows same pattern as popup's existing `status === 'error'` branch.
+- Change impact: Changes are scoped to the three files. No shared component interfaces changed. No new props added. `broadcastError` is a file-local helper.
+
+**Build result:** `pnpm --filter @shirajitsu/extension build` — PASS (tsc + vite, 0 errors)
+**Test result:** `pnpm --filter @shirajitsu/extension test` — 6/6 PASS
+
+**Decisions made:**
+- Used `chrome.runtime.sendMessage` (broadcast to all extension pages) rather than `chrome.tabs.sendMessage` (content-script only) for `SHOW_ERROR` and the sidebar copy of `SHOW_ANNOTATIONS`. This is the correct MV3 channel for popup-to-sidebar communication. Documented as DEC-006.
+- Kept `chrome.tabs.sendMessage` for `SHOW_ANNOTATIONS` to content script (unchanged) for inline highlight mode. Added a second broadcast via `chrome.runtime.sendMessage` for the sidebar copy.
+- `role="alert"` on the sidebar error paragraph: this is a live region that will be announced immediately by screen readers when it appears — appropriate for an error condition.
+
+**Issues flagged:** None at P2 or above.

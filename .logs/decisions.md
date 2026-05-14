@@ -97,3 +97,23 @@
 **Decision made:** Option 2. The domain request struct is the natural home for all fields that arrive from the client and flow through the system.
 
 **PM/Tech Lead review required:** No
+
+---
+
+## DEC-006
+
+**Date:** 2026-05-11
+**Agent:** Frontend Engineer
+**Task:** extension-error-visibility-fix
+
+**Decision:** Use `chrome.runtime.sendMessage` (broadcast) rather than `chrome.tabs.sendMessage` (content script only) for popup-to-sidebar communication
+
+**Context:** The sidebar (`sidepanel/index.html`) is a separate extension page. It registers listeners via `chrome.runtime.onMessage`. `chrome.tabs.sendMessage` targets only the content script injected into the active tab — it does not reach extension pages such as the sidebar. The existing `SHOW_ANNOTATIONS` handler in Sidebar.tsx was therefore unreachable from the popup's `chrome.tabs.sendMessage` call. All popup-to-sidebar messages must go via `chrome.runtime.sendMessage`.
+
+**Options considered:**
+1. Route through the background service worker — popup sends to background, background forwards to sidebar. More complex, adds a relay hop, background would need a registry of open sidebar ports.
+2. Broadcast directly from popup via `chrome.runtime.sendMessage` — sidebar and background both receive it; background ignores it (returns false for unrecognized types); sidebar handles it. Simpler, no relay needed.
+
+**Decision made:** Option 2. `chrome.runtime.sendMessage` is the standard MV3 channel for popup-to-sidebar communication and requires no additional infrastructure.
+
+**PM/Tech Lead review required:** No

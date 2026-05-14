@@ -20,6 +20,7 @@ export function Popup() {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab?.id) return
       chrome.tabs.sendMessage(tab.id, { type: 'GET_CONTEXT' }, (res) => {
+        if (chrome.runtime.lastError) return
         if (res?.context) setContext(res.context as DetectedContext)
       })
     })
@@ -33,24 +34,46 @@ export function Popup() {
     if (tab?.id) chrome.sidePanel.open({ tabId: tab.id })
   }
 
+  function broadcastError(msg: string) {
+    setStatus('error')
+    setErrorMsg(msg)
+    // Broadcast to sidebar (which listens on chrome.runtime.onMessage)
+    chrome.runtime.sendMessage({ type: 'SHOW_ERROR', payload: { error: msg } })
+  }
+
   async function handleAnalyze() {
     setStatus('analyzing')
     setErrorMsg('')
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (!tab?.id) return
+
     chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, (res) => {
-      if (res?.error) {
-        setStatus('error')
-        setErrorMsg(res.error as string)
-      } else {
-        setStatus('done')
-        // Forward annotations to sidebar
-        chrome.tabs.sendMessage(tab.id!, {
-          type: 'SHOW_ANNOTATIONS',
-          payload: { annotations: res.annotations, settings },
-        })
-        chrome.sidePanel.open({ tabId: tab.id! })
+      // Check for messaging errors first (content script not injected, chrome:// page, etc.)
+      if (chrome.runtime.lastError || res === undefined) {
+        const msg =
+          chrome.runtime.lastError?.message ??
+          'Could not reach the page. Try reloading the tab and clicking Analyze again.'
+        broadcastError(msg)
+        return
       }
+
+      if (res.error) {
+        broadcastError(res.error as string)
+        return
+      }
+
+      setStatus('done')
+      // Forward annotations to content script (handles inline highlight mode)
+      // and to sidebar via runtime broadcast
+      chrome.tabs.sendMessage(tab.id!, {
+        type: 'SHOW_ANNOTATIONS',
+        payload: { annotations: res.annotations, settings },
+      })
+      chrome.runtime.sendMessage({
+        type: 'SHOW_ANNOTATIONS',
+        payload: { annotations: res.annotations, settings },
+      })
+      chrome.sidePanel.open({ tabId: tab.id! })
     })
   }
 

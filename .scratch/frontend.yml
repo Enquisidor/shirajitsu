@@ -1,9 +1,9 @@
 agent: frontend
 session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-06T00:00:00Z"
+last_updated: "2026-05-11T15:29:00Z"
 status: complete
 
-current_task: frontend-types-fix — resolved TypeScript type mismatches in @shirajitsu/types consumers
+current_task: extension-error-visibility-fix — fixed silent failure in Chrome extension error path
 
 tasks:
   frontend-types-fix:
@@ -31,5 +31,31 @@ tasks:
 
       Decision DEC-001 logged: mock data alignment in test files; no assertions changed.
       Blocker from orchestrator.yml resolved: "TypeScript type mismatches blocking extension, web, and SDK CI"
+
+  extension-error-visibility-fix:
+    description: Fix silent failure when clicking "Analyze this page" — errors not shown in popup or sidebar; content script unavailable path caused unchecked TypeError
+    status: complete
+    started_at: "2026-05-11T15:20:00Z"
+    completed_at: "2026-05-11T15:29:00Z"
+    output: null
+    notes: |
+      Files changed:
+        - ui/extension/src/popup/Popup.tsx
+            - handleAnalyze(): added chrome.runtime.lastError check and res === undefined guard
+            - broadcastError() helper: sets popup error state + sends SHOW_ERROR via chrome.runtime.sendMessage
+            - Added chrome.runtime.sendMessage broadcast for SHOW_ANNOTATIONS (sidebar channel)
+            - GET_CONTEXT callback: added chrome.runtime.lastError guard
+        - ui/extension/src/sidebar/Sidebar.tsx
+            - Added 'error' to status state union
+            - Added errorMsg state
+            - Added SHOW_ERROR message handler
+            - Rendered sidebar__error paragraph with role="alert"
+            - Scoped annotation card render to status === 'done'
+        - ui/extension/src/styles/sidebar.css
+            - Added .sidebar__error rule (same padding as .sidebar__empty, color: var(--color-risk-high))
+
+      Build: pnpm --filter @shirajitsu/extension build — PASS
+      Tests: pnpm --filter @shirajitsu/extension test — 6/6 PASS
+      Decision DEC-006 logged: chrome.runtime.sendMessage vs chrome.tabs.sendMessage for popup-to-sidebar
 
 blockers: []

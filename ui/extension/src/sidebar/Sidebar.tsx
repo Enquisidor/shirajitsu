@@ -5,16 +5,23 @@ import { AnnotationCard } from '@shirajitsu/react'
 export function Sidebar() {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
-  const [status, setStatus] = useState<'idle' | 'analyzing' | 'done'>('idle')
+  const [status, setStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     chrome.runtime.onMessage.addListener((message) => {
       if (message.type === 'SHOW_ANNOTATIONS') {
         setAnnotations(message.payload.annotations as Annotation[])
+        setErrorMsg('')
         setStatus('done')
       }
       if (message.type === 'ANALYSIS_STARTED') {
+        setErrorMsg('')
         setStatus('analyzing')
+      }
+      if (message.type === 'SHOW_ERROR') {
+        setErrorMsg(message.payload.error as string)
+        setStatus('error')
       }
     })
   }, [])
@@ -41,11 +48,15 @@ export function Sidebar() {
           <p className="sidebar__loading">Analyzing claims…</p>
         )}
 
+        {status === 'error' && (
+          <p className="sidebar__error" role="alert">{errorMsg}</p>
+        )}
+
         {status === 'done' && annotations.length === 0 && (
           <p className="sidebar__empty">No checkable factual claims found.</p>
         )}
 
-        {annotations.map((annotation) => (
+        {status === 'done' && annotations.map((annotation) => (
           <AnnotationCard
             key={annotation.claim.charOffset}
             annotation={annotation}

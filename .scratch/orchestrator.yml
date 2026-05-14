@@ -1,9 +1,9 @@
 agent: orchestrator
 session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-05T18:10:00Z"
+last_updated: "2026-05-11T15:29:00Z"
 status: active
 
-current_task: backend-task2-annotator — backend agent implementing annotator /annotate handler
+current_task: extension-error-visibility-fix — complete; awaiting commit and push
 
 tasks:
   status-audit:
@@ -160,6 +160,25 @@ tasks:
       Gate artifact written: .handoffs/source-evaluator-evaluate.md
       PM installed Go via brew install go which unblocked toolchain verification.
 
+  extension-error-visibility-fix:
+    description: Fix silent failure in Chrome extension — popup shows no feedback when "Analyze this page" clicked; errors not surfaced in popup or sidebar
+    status: complete
+    started_at: "2026-05-11T15:20:00Z"
+    completed_at: "2026-05-11T15:29:00Z"
+    output: null
+    notes: |
+      Delegated to Frontend Engineer (focused invocation).
+      Files changed:
+        - ui/extension/src/popup/Popup.tsx
+        - ui/extension/src/sidebar/Sidebar.tsx
+        - ui/extension/src/styles/sidebar.css
+      Build: PASS (tsc + vite, 0 type errors)
+      Tests: 6/6 PASS
+      Key fix: chrome.runtime.lastError guard in handleAnalyze; broadcastError() helper;
+               SHOW_ERROR handler in Sidebar; sidebar__error CSS rule; runtime broadcast for sidebar.
+      Decision DEC-006 logged: popup-to-sidebar channel must use chrome.runtime.sendMessage.
+      Commit and push: PENDING (user requested)
+
 blockers:
   - description: |
       TypeScript type mismatches blocking extension, web, and SDK CI. The @shirajitsu/types package
@@ -167,10 +186,9 @@ blockers:
       removing numerator from TensionRating; adding failedClaims/sessionStats to AnalyzeResponse)
       but the consuming code in ui/extension, ui/web, and sdk/core has not been updated to match.
     raised_at: "2026-05-05T00:00:00Z"
-    resolved_at: null
-    deferred: true
-    deferred_at: "2026-05-05T13:00:00Z"
-    deferred_reason: "PM instructed to defer — will be addressed in a separate task after backend pipeline completes"
+    resolved_at: "2026-05-06T00:00:00Z"
+    deferred: false
+    resolution: "Fixed by frontend-types-fix task."
   - description: |
       deploy-annotator CI fails at GCR login step. Likely a credential or registry URL configuration
       issue in the deploy-annotator.yml workflow.
