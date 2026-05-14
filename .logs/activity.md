@@ -151,7 +151,7 @@
 
 **Root causes identified:**
 
-Bug 1 (sidebar stays idle — primary bug): The sidepanel page only receives `chrome.runtime` messages while it is open. If the user clicks "Analyze this page" without the sidebar open, `SHOW_ERROR` is broadcast into the void — no listener exists to receive it. The previous fix (DEC-006) correctly changed the channel from `chrome.tabs.sendMessage` to `chrome.runtime.sendMessage`, but did not ensure the sidebar was actually open before broadcasting. Fix: open the sidepanel and send `ANALYSIS_STARTED` at the START of `handleAnalyze`, before initiating the analysis pipeline, so the sidebar is open and listening by the time any result or error is broadcast.
+Bug 1 (sidebar stays idle — primary bug): The sidepanel page only receives `chrome.runtime` messages while it is open. If the user clicks "Analyze this page" without the sidebar open, `SHOW_ERROR` is broadcast into the void — no listener exists to receive it. The previous fix (DEC-006) correctly changed the channel from `chrome.tabs.sendMessage` to `chrome.runtime.sendMessage`, but did not ensure the sidebar was actually open before broadcasting. Fix: open the sidepanel and send `ANALYSIS_STARTED` at the START of `handleAnalyze`, before initiating the analysis pipeline, so the sidebar is open and listening by the time any result or error message is broadcast.
 
 Bug 2 (content-script → background communication reliability): In some Chrome MV3 environments, the Promise form of `chrome.runtime.sendMessage` in a content script resolves with `undefined` when the background service worker calls `sendResponse` asynchronously (inside a `.then()`). This causes `runAnalysis()` to resolve with `undefined`, and `sendResponse(undefined)` is called to the popup. Additionally, if the background service worker is cold and rejects the message, `runAnalysis().then(sendResponse)` had no `.catch()`, so the rejection was unhandled and `sendResponse` was never called — leaving the popup stuck in `analyzing` indefinitely. Fix: use the callback form of `chrome.runtime.sendMessage` (wrapped in a `new Promise`) which reliably delivers the `sendResponse` value and surfaces errors via `chrome.runtime.lastError`. Add `.catch()` to `runAnalysis().then(sendResponse)` to handle any remaining rejection.
 
@@ -172,5 +172,90 @@ Bug 2 (content-script → background communication reliability): In some Chrome 
 **Assumptions made:**
 - The sidepanel page finishes loading and registering its onMessage listener within the time it takes the analysis pipeline to complete (claim extraction + source evaluation + annotation). For an LLM-based pipeline, this duration is measured in seconds. The sidepanel React app loads in under 100ms. This assumption holds for the intended production use case.
 - The `chrome.sidePanel.open` call in handleAnalyze does not throw when called from a popup context. Per Chrome MV3 documentation, `sidePanel.open` is permitted from popup action contexts and requires the `sidePanel` permission, which is declared in `public/manifest.json`.
+
+**Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: extension-sidepanel-race-fix
+
+**Agent:** Frontend Engineer (focused invocation)
+**Task ID:** extension-sidepanel-race-fix
+**Status:** Completed
+**Date:** 2026-05-11
+
+**Task description:** Fix "Receiving end does not exist" error in the sidebar caused by three compounding race conditions: fire-and-forget sidePanel.open(), unguarded sendMessage calls, and no session-storage fallback for state missed during React mount.
+
+**Inputs received:**
+- Bug report (inline): three root causes identified, exact fix specified
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — added safeBroadcast() helper; persist state to chrome.storage.session before sidePanel.open(); use safeBroadcast for ANALYSIS_STARTED, SHOW_ERROR, and SHOW_ANNOTATIONS; broadcastError now persists to session storage
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx` — rewritten useEffect: read session storage on mount before registering listener; typed listener function; cleanup return removes listener on unmount
+
+**Self-checks applied:**
+- Security: safeBroadcast suppresses browser-internal error strings by consuming lastError, not logging it. No user-controlled content inserted via innerHTML. Error messages originate from browser runtime (chrome.runtime.lastError) or extension's own handlers — not from page content. chrome.storage.session is extension-private, not accessible to page scripts. No new dependencies.
+- Accessibility: No change to rendered ARIA structure or interactive elements. Existing role="alert" on sidebar error paragraph unchanged.
+- Performance: One additional chrome.storage.session.set per analyze flow — negligible overhead (extension storage API, not network). No new renders or requests added.
+- Design accuracy (architectural): Component names, state variable names, and message types match existing conventions and glossary. Storage keys use namespaced prefix (shirajitsu_) to avoid collisions.
+
+**Decisions made:**
+- Use chrome.storage.session as persistent state bridge to eliminate sidepanel mount-timing race — DEC-009
+
+**Assumptions made:**
+- chrome.storage.session is available in all Chrome MV3 contexts (popup, sidepanel). This is documented in the Chrome Extensions API for Manifest V3.
+- JSON.stringify/parse round-trip for annotations is lossless for the Annotation type (all fields are JSON-serializable primitives and arrays).
+
+**Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: extension-unguarded-tabmessage-fix
+
+**Agent:** Frontend Engineer (focused invocation)
+**Task ID:** extension-unguarded-tabmessage-fix
+**Status:** Completed
+**Date:** 2026-05-11
+
+**Task description:** Find and fix every unguarded `chrome.runtime.sendMessage` and `chrome.tabs.sendMessage` call across the four extension source files that could produce "Could not establish connection. Receiving end does not exist." errors after commit 0d22584.
+
+**Inputs received:**
+- Bug report (inline): error persists after 0d22584; tasked to audit all four source files for unguarded send calls
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — added `safeTabMessage` helper; replaced unguarded `chrome.tabs.sendMessage` for `SHOW_ANNOTATIONS` (line 96) with `safeTabMessage`
+
+**Audit findings — all four files:**
+
+| File | Call | Guarded? | Notes |
+|---|---|---|---|
+| Popup.tsx | `chrome.tabs.sendMessage(tab.id, { type: 'GET_CONTEXT' }, cb)` | Yes — callback checks `chrome.runtime.lastError` | Already guarded |
+| Popup.tsx | `chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, cb)` | Yes — callback checks `chrome.runtime.lastError` | Already guarded |
+| Popup.tsx | `chrome.tabs.sendMessage(tab.id!, { type: 'SHOW_ANNOTATIONS' })` | **No — no callback at all** | **Root cause of persisting error. Fixed.** |
+| Popup.tsx | `chrome.runtime.sendMessage` (via `safeBroadcast`) | Yes | Already guarded |
+| content/index.ts | `chrome.runtime.sendMessage` (callback form) | Yes — callback checks `chrome.runtime.lastError` | Already guarded |
+| background/index.ts | No sendMessage calls | N/A | Only a message listener |
+| Sidebar.tsx | No sendMessage calls | N/A | Only a message listener |
+
+**Self-checks applied:**
+- Security: `safeTabMessage` swallows `chrome.runtime.lastError` (browser-internal string), not user content. No user-controlled strings in the helper. No new dependencies. No secrets introduced.
+- Accessibility: No UI changes. No ARIA structure changes.
+- Performance: No additional renders or requests. One callback invocation per `SHOW_ANNOTATIONS` tab send — negligible.
+- Design accuracy (architectural): `safeTabMessage` is a file-local helper, not a new exported component. Message type `SHOW_ANNOTATIONS` unchanged. No domain terminology changes.
+
+**Build result:** `pnpm --filter @shirajitsu/extension build` — PASS (tsc + vite, 0 errors, 0 TypeScript errors)
+**Test result:** `pnpm --filter @shirajitsu/extension test` — 6/6 PASS
+
+**Decisions made:**
+- Introduced `safeTabMessage` helper for fire-and-forget `chrome.tabs.sendMessage` calls — DEC-010
+
+**Assumptions made:**
+- The `SHOW_ANNOTATIONS` send to the content script is non-critical for the sidebar path. The sidebar receives annotations via `safeBroadcast` (chrome.runtime.sendMessage). The content-script send is only needed for inline highlight mode. If the content script is absent (chrome:// page, PDF viewer), swallowing the error is correct — the inline highlight path silently no-ops, and the sidebar still renders annotations.
 
 **Issues flagged:** None at P2 or above.

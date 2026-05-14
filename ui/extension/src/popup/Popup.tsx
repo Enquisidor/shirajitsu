@@ -10,6 +10,20 @@ function safeBroadcast(message: Record<string, unknown>): void {
   })
 }
 
+/**
+ * Fire-and-forget chrome.tabs.sendMessage that silently swallows the
+ * "Receiving end does not exist" error. Use this whenever the content script
+ * may not be injected (e.g. chrome:// pages, PDF viewer, or tabs that have
+ * not yet loaded the content script). The callback must always be provided to
+ * chrome.tabs.sendMessage — omitting it causes Chrome to log an uncaught
+ * runtime error when the receiving end is absent.
+ */
+function safeTabMessage(tabId: number, message: Record<string, unknown>): void {
+  chrome.tabs.sendMessage(tabId, message, () => {
+    void chrome.runtime.lastError
+  })
+}
+
 export function Popup() {
   const [context, setContext] = useState<DetectedContext | null>(null)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
@@ -91,9 +105,12 @@ export function Popup() {
       setStatus('done')
       // Persist completed state so sidebar can recover it on mount
       chrome.storage.session.set({ shirajitsu_state: 'done', shirajitsu_annotations: JSON.stringify(res.annotations) })
-      // Forward annotations to content script (handles inline highlight mode)
-      // and to sidebar via runtime broadcast
-      chrome.tabs.sendMessage(tab.id!, {
+      // Forward annotations to content script (handles inline highlight mode).
+      // Use safeTabMessage because the content script may not be present on
+      // all page types (chrome://, PDF viewer, etc.). The sidebar receives
+      // annotations via the safeBroadcast below; this send only drives the
+      // inline highlight path and is non-critical.
+      safeTabMessage(tab.id!, {
         type: 'SHOW_ANNOTATIONS',
         payload: { annotations: res.annotations, settings },
       })

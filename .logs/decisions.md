@@ -158,3 +158,43 @@
 **Decision made:** Option 2. The callback form is more reliable across Chrome MV3 versions for content-script-to-background communication where an async `sendResponse` is involved. The outer `new Promise` wrapper maintains the async function signature expected by `runAnalysis().then(sendResponse)`.
 
 **PM/Tech Lead review required:** No
+
+---
+
+## DEC-009
+
+**Date:** 2026-05-11
+**Agent:** Frontend Engineer
+**Task:** extension-sidepanel-race-fix
+
+**Decision:** Use chrome.storage.session as a persistent state bridge between the popup and the sidebar to handle the mount-timing race
+
+**Context:** Even with the sidepanel opened before broadcasting ANALYSIS_STARTED (DEC-007), there is a residual race: chrome.sidePanel.open() is fire-and-forget, and the ANALYSIS_STARTED message sent immediately after may arrive before React has mounted and the useEffect listener has been registered. Additionally, the sidebar's useEffect never returned a cleanup function, so the onMessage listener accumulated on every re-render. The solution is to write analysis state to chrome.storage.session before opening the sidepanel — the sidebar then reads this stored state on mount and falls back to it whenever a runtime message was missed during the React initialization gap.
+
+**Options considered:**
+1. Add a retry loop in the popup — broadcast ANALYSIS_STARTED repeatedly until the sidebar acknowledges. This is complex, introduces polling, and can result in duplicate state updates if the sidebar eventually receives both the initial and retry messages.
+2. Use chrome.storage.session as a write-once state bridge — popup writes state before opening the sidepanel; sidebar reads it on mount. Runtime messages still work for live updates; session storage is the fallback for anything sent during the React initialization gap. This is the standard MV3 pattern for persisting ephemeral cross-page state.
+
+**Decision made:** Option 2 (session storage bridge). This eliminates the race entirely: the sidebar does not need to receive the runtime message — it can always reconstruct current state from session storage on mount. Runtime messages remain active for real-time updates. No retry logic, no duplicate state risk.
+
+**PM/Tech Lead review required:** No
+
+---
+
+## DEC-010
+
+**Date:** 2026-05-11
+**Agent:** Frontend Engineer
+**Task:** extension-unguarded-tabmessage-fix
+
+**Decision:** Add a `safeTabMessage` helper for fire-and-forget `chrome.tabs.sendMessage` calls and use it for the `SHOW_ANNOTATIONS` content-script send in Popup.tsx
+
+**Context:** After commit 0d22584 introduced `safeBroadcast` and session storage state bridging, the "Could not establish connection. Receiving end does not exist." error persisted. Root cause: the `chrome.tabs.sendMessage` call that forwards `SHOW_ANNOTATIONS` to the content script (for inline highlight mode) at line 96 of Popup.tsx had no callback. When the content script is not injected — e.g. on a chrome:// page, PDF viewer, or a tab that has not loaded the content script — Chrome logs an uncaught runtime error from this call. Unlike `chrome.runtime.sendMessage`, the `chrome.tabs.sendMessage` form does not raise an unhandled promise rejection; it raises a browser-level error that appears as "Could not establish connection. Receiving end does not exist." in the extension's error console and surfaces to the user via the sidebar's error display. A callback reading `chrome.runtime.lastError` suppresses this. The `safeTabMessage` helper is introduced for clarity and to prevent the same mistake on any future `chrome.tabs.sendMessage` fire-and-forget calls.
+
+**Options considered:**
+1. Inline the callback at the call site — minimal code change, but the pattern is easy to repeat incorrectly on future calls.
+2. Introduce a `safeTabMessage` helper analogous to `safeBroadcast` — makes the intent explicit, documents the pattern, and prevents the same mistake on future tab message calls.
+
+**Decision made:** Option 2. The helper is two lines, costs nothing, and makes the protection pattern discoverable for future contributors.
+
+**PM/Tech Lead review required:** No
