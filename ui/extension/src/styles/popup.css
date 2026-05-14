@@ -119,6 +119,44 @@ body {
   color: var(--color-accent);
 }
 
+.popup__model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.popup__section-label {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.model-selector--compact {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-surface);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.popup__sidebar-btn {
+  background: none;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-accent);
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.popup__sidebar-btn:hover {
+  background: rgba(82, 183, 136, 0.1);
+}
+
 .popup__display-toggle {
   display: flex;
   align-items: center;

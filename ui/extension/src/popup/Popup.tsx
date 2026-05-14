@@ -28,6 +28,11 @@ export function Popup() {
   const effectiveMode = settings.manualModeOverride ?? context?.mode ?? 'reader'
   const ctaLabel = effectiveMode === 'writer' ? 'Analyze my draft' : 'Analyze this article'
 
+  async function handleOpenSidebar() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id) chrome.sidePanel.open({ tabId: tab.id })
+  }
+
   async function handleAnalyze() {
     setStatus('analyzing')
     setErrorMsg('')
@@ -105,6 +110,10 @@ export function Popup() {
 
       {status === 'error' && <p className="popup__error">{errorMsg}</p>}
       {status === 'done' && <p className="popup__success">Analysis complete — see sidebar</p>}
+
+      <button className="popup__sidebar-btn" onClick={handleOpenSidebar}>
+        Open Sidebar
+      </button>
 
       <div className="popup__model">
         <span className="popup__section-label">Model:</span>
