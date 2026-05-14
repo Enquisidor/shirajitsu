@@ -12,7 +12,10 @@ export default defineConfig({
   plugins: [react()],
   // root=src so HTML entrypoints output at popup/index.html and sidepanel/index.html
   // (without src/ prefix), matching the paths declared in public/manifest.json.
+  // base='./' so Vite emits relative asset paths — Chrome extensions don't resolve
+  // absolute paths (/foo.js) correctly; relative paths (../foo.js) are required.
   root: resolve(__dirname, 'src'),
+  base: './',
   publicDir: resolve(__dirname, 'public'),
   resolve: {
     alias: {
