@@ -38,3 +38,9 @@ Issue IDs: [comma-separated list of IDs returned by log-issue, or "None"]
 | **PASS** | No findings at any severity level. |
 
 Never assign FAIL solely on P2 or P3 findings. Never assign PASS when P0 or P1 findings exist.
+
+---
+
+## Stop after the verdict
+
+Once the verdict block is written, you are done. Do not continue reading files. Do not start a second pass of the checklist. Do not add findings after the verdict. Do not summarize your findings in prose after writing the verdict block. The verdict block is the final output — return control to the orchestrator immediately after writing it.
