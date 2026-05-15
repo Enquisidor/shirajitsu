@@ -4,6 +4,10 @@ import type { AIModel, UserSettings } from '@shirajitsu/types'
 import { DEFAULT_USER_SETTINGS } from '@shirajitsu/types'
 import { ModelSelector } from '@shirajitsu/react'
 
+/** User-visible fallback for any Chrome messaging failure. */
+const MESSAGING_ERROR_MSG =
+  'Could not reach the page. Try reloading the tab and clicking Analyze again.'
+
 function safeBroadcast(message: Record<string, unknown>): void {
   chrome.runtime.sendMessage(message, () => {
     void chrome.runtime.lastError
@@ -36,11 +40,19 @@ export function Popup() {
       setSettings({ ...DEFAULT_USER_SETTINGS, ...(stored as Partial<UserSettings>) })
     })
 
-    // Get current tab context from content script
+    // Get current tab context from content script.
+    // safeTabMessage is NOT used here because we need the response value; instead
+    // we supply the mandatory callback and read lastError to suppress Chrome's
+    // "Receiving end does not exist" console log on pages without the content script.
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab?.id) return
       chrome.tabs.sendMessage(tab.id, { type: 'GET_CONTEXT' }, (res) => {
-        if (chrome.runtime.lastError) return
+        // Consume lastError so Chrome does not log an uncaught-error warning
+        // when the content script is absent (chrome:// pages, PDF viewer, etc.).
+        if (chrome.runtime.lastError) {
+          void chrome.runtime.lastError
+          return
+        }
         if (res?.context) setContext(res.context as DetectedContext)
       })
     })
@@ -81,24 +93,34 @@ export function Popup() {
     safeBroadcast({ type: 'ANALYSIS_STARTED' })
 
     chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, (res) => {
-      // Check for messaging errors first (content script not injected, chrome:// page, etc.)
+      // Check for messaging errors first (content script not injected, chrome:// page, etc.).
+      // Always show a user-friendly message — never expose raw Chrome API error strings
+      // such as "Could not establish connection. Receiving end does not exist." to the user.
       if (chrome.runtime.lastError) {
-        broadcastError(
-          chrome.runtime.lastError.message ??
-            'Could not reach the page. Try reloading the tab and clicking Analyze again.',
-        )
+        // Read lastError.message to suppress Chrome's uncaught-error console warning,
+        // then discard it in favour of the user-friendly fallback.
+        void chrome.runtime.lastError.message
+        broadcastError(MESSAGING_ERROR_MSG)
         return
       }
 
       // res may be undefined if the content script called sendResponse(undefined) or if the
       // port was closed without a response (e.g. service-worker cold-start race).
       if (res === undefined || res === null) {
-        broadcastError('Could not reach the page. Try reloading the tab and clicking Analyze again.')
+        broadcastError(MESSAGING_ERROR_MSG)
         return
       }
 
       if (res.error) {
-        broadcastError(res.error as string)
+        // The content script surfaces its own user-friendly messages; only fall
+        // back to the generic messaging error for raw Chrome API error strings
+        // (which start with "Error: Could not establish connection").
+        const raw = res.error as string
+        const isChromeMsgError =
+          raw.includes('Could not establish connection') ||
+          raw.includes('Receiving end does not exist') ||
+          raw.includes('message port closed')
+        broadcastError(isChromeMsgError ? MESSAGING_ERROR_MSG : raw)
         return
       }
 

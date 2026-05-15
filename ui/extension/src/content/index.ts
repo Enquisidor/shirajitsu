@@ -58,7 +58,13 @@ async function runAnalysis(): Promise<{ error: string } | AnalyzeResponse> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage({ type: 'ANALYZE_TEXT', payload: request }, (response) => {
       if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message ?? 'Background script did not respond.'))
+        // Consume lastError to suppress Chrome's uncaught-error console warning,
+        // then reject with a user-friendly message. Never expose raw Chrome API
+        // error strings (e.g. "Could not establish connection. Receiving end does
+        // not exist.") — these propagate up through sendResponse to the popup's
+        // broadcastError and would be displayed verbatim in the sidebar.
+        void chrome.runtime.lastError.message
+        reject(new Error('Could not reach the analysis service. Try reloading the tab and clicking Analyze again.'))
         return
       }
       resolve(response as AnalyzeResponse | { error: string })
