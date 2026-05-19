@@ -1,9 +1,9 @@
 agent: frontend
-session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-11T16:24:00Z"
+session_id: ext-auth-2026-05-11
+last_updated: "2026-05-15T16:10:00Z"
 status: complete
 
-current_task: extension-unguarded-tabmessage-fix — fixed unguarded chrome.tabs.sendMessage for SHOW_ANNOTATIONS in Popup.tsx
+current_task: ISS-001 complete — ClerkProvider popup entrypoint wrap
 
 tasks:
   frontend-types-fix:
@@ -83,5 +83,30 @@ tasks:
       Build: pnpm --filter @shirajitsu/extension build — PASS (tsc + vite, 0 errors)
       Tests: pnpm --filter @shirajitsu/extension test — 6/6 PASS
       Decision DEC-010 logged.
+
+  ISS-001-clerk-provider-popup-entrypoint:
+    description: "Wrap popup entrypoint (main.tsx) with ClerkProvider from @clerk/chrome-extension; validate VITE_CLERK_PUBLISHABLE_KEY at startup"
+    status: complete
+    started_at: "2026-05-15T15:50:00Z"
+    completed_at: "2026-05-15T16:10:00Z"
+    output: ".handoffs/frontend-completion-ISS-001.md"
+    notes: |
+      Files changed:
+        - ui/extension/src/popup/main.tsx
+            - Added ClerkProvider from @clerk/chrome-extension
+            - Added startup invariant: throws descriptive Error if VITE_CLERK_PUBLISHABLE_KEY
+              is missing or does not start with 'pk_'
+            - Wrapped <Popup /> in <ClerkProvider publishableKey={...}> inside <StrictMode>
+        - ui/extension/tsconfig.json
+            - Added "vite/client" to types array for import.meta.env type support (DEC-017)
+
+      Typecheck result: ISS-001-introduced error resolved. Pre-existing errors in
+      handler.test.ts and Popup.test.tsx remain (not ISS-001 scope).
+
+      Test result: 39 failed | 9 passed (48 total) — no regressions vs phase-1 baseline.
+      TC-001 through TC-013 still fail (require ISS-002 — Popup.tsx conditional rendering).
+
+      Decisions: DEC-017 logged.
+      Completion artifact: .handoffs/frontend-completion-ISS-001.md
 
 blockers: []

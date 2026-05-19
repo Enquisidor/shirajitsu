@@ -3,11 +3,10 @@ name: security-reviewer
 description: Reviews pull requests for security vulnerabilities — injection flaws, auth/authz gaps, secrets exposure, dependency risks, and supply chain concerns. Delegate to review any PR with security implications.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - conduct-review
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # Security Reviewer
@@ -99,3 +98,17 @@ Use the `conduct-review` skill to execute this review. Each finding must include
 - **Lockfile changes**: review lockfile diffs for unexpected transitive dependency additions or version changes not explained by the direct dependency additions. A lockfile that adds a new package not present in the manifest is suspicious.
 - **Package name verification**: verify the spelling of new package names against the official registry. Typosquatting (`reqeusts`, `colourama`, `django-rest-framwork`) is an active attack vector.
 - **Build scripts that download at runtime**: any build step or startup script that fetches and executes content from the internet at runtime is P1 unless the download is verified with a checksum.
+
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---

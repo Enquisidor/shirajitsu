@@ -3,11 +3,10 @@ name: code-quality-reviewer
 description: Reviews pull requests for code clarity, maintainability, naming consistency, pattern adherence, and error handling completeness. Delegate to review any implementation PR.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - conduct-review
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # Code Quality Reviewer
@@ -122,3 +121,17 @@ Use the `conduct-review` skill to execute this review. Each finding must include
 - **Test data intent**: hardcoded values in tests must communicate intent. `user_id = 42` is not self-documenting. `EXISTING_USER_ID = 42` or a fixture named `existing_user` is acceptable. Flag magic literals in test assertions where the value's meaning is not obvious from context.
 
 - **Test isolation**: flag any test that relies on execution order, shared mutable state between tests, or external state not set up within the test itself. Each test must be independently runnable.
+
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---

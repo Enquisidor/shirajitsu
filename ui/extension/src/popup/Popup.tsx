@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth, useUser } from '@clerk/chrome-extension'
 import type { DetectedContext } from '@/context/detector'
 import type { AIModel, UserSettings } from '@shirajitsu/types'
 import { DEFAULT_USER_SETTINGS } from '@shirajitsu/types'
@@ -28,7 +29,36 @@ function safeTabMessage(tabId: number, message: Record<string, unknown>): void {
   })
 }
 
-export function Popup() {
+/**
+ * SignInPrompt — rendered when no ClerkSession is active (isSignedIn is false or undefined).
+ * Displays only the branding header and a "Sign in" button.
+ * No analyse controls, mode selector, model selector, sidebar button, or display toggle.
+ */
+function SignInPrompt({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="popup">
+      <header className="popup__header">
+        <span className="popup__logo">真実</span>
+        <span className="popup__title">Shirajitsu</span>
+      </header>
+      <button className="popup__sign-in" onClick={onSignIn}>
+        Sign in
+      </button>
+    </div>
+  )
+}
+
+/**
+ * AnalyseView — rendered when a ClerkSession is active (isSignedIn is true).
+ * Displays SignedInIdentity, "Sign out" button, and all existing analyse controls.
+ */
+function AnalyseView({
+  signedInIdentity,
+  onSignOut,
+}: {
+  signedInIdentity: string
+  onSignOut: () => void
+}) {
   const [context, setContext] = useState<DetectedContext | null>(null)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
   const [status, setStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle')
@@ -168,6 +198,13 @@ export function Popup() {
         <span className="popup__title">Shirajitsu</span>
       </header>
 
+      <div className="popup__identity">
+        <span className="popup__signed-in-identity">{signedInIdentity}</span>
+        <button className="popup__sign-out" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+
       <div className="popup__context">
         <span className="popup__mode-label">Mode:</span>
         <button
@@ -225,5 +262,55 @@ export function Popup() {
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * usePopupAuth — wraps useAuth() from @clerk/chrome-extension.
+ *
+ * The Clerk SDK exposes openSignIn() on the Clerk instance at runtime, but
+ * the @clerk/types UseAuthReturn type definition does not declare it. The test
+ * mock for useAuth() includes openSignIn as per the ISS-002 test contract, so
+ * we use a type assertion here to access it without TypeScript errors.
+ *
+ * In production, the Clerk SDK resolves openSignIn from the underlying Clerk
+ * global. If the SDK version does not expose it via useAuth(), escalate to
+ * the Architect and switch to useClerk().openSignIn() instead.
+ */
+function usePopupAuth() {
+  const auth = useAuth() as ReturnType<typeof useAuth> & { openSignIn: (props?: unknown) => void }
+  return auth
+}
+
+/**
+ * Popup — the root component for the Chrome extension popup.
+ *
+ * Renders exactly ONE of:
+ *   - SignInPrompt: when isSignedIn is false or undefined (no active ClerkSession)
+ *   - AnalyseView: when isSignedIn is true (active ClerkSession)
+ *
+ * This is a hard security invariant: analyse controls MUST NOT be rendered
+ * when no ClerkSession is active.
+ */
+export function Popup() {
+  const { isSignedIn, signOut, openSignIn } = usePopupAuth()
+  const { user } = useUser()
+
+  // Derive SignedInIdentity: fullName if non-empty, otherwise primaryEmailAddress.
+  // Per spec: user.fullName if non-empty, else user.primaryEmailAddress?.emailAddress.
+  const signedInIdentity =
+    isSignedIn && user
+      ? (user.fullName || user.primaryEmailAddress?.emailAddress || '')
+      : ''
+
+  if (!isSignedIn) {
+    return <SignInPrompt onSignIn={() => openSignIn()} />
+  }
+
+  return (
+    <AnalyseView
+      signedInIdentity={signedInIdentity}
+      onSignOut={() => { void signOut() }}
+    />
   )
 }

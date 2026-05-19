@@ -1,256 +1,270 @@
 agent: orchestrator
-session_id: impl-phase1-2026-04-29
-last_updated: "2026-05-11T17:00:00Z"
+session_id: ext-auth-2026-05-11
+last_updated: "2026-05-15T10:00:00Z"
 status: active
 
-current_task: extension-sidebar-race-condition-fix — diagnosing MV3 messaging race; delegating to Frontend Engineer
+current_phase: 5
+
+current_task: "Phase 5 — ISS-001 complete; spawning ISS-002 and ISS-003 in parallel (Frontend Engineers)"
 
 tasks:
-  status-audit:
-    description: Read all service, UI, SDK, spec, infra, and CI files to produce a comprehensive project status report
+  phase1-po-gherkin:
+    description: "PO Agent authors Gherkin feature files for Extension Auth (Clerk OAuth)"
     status: complete
-    started_at: "2026-04-29T00:00:00Z"
-    completed_at: "2026-04-29T00:00:00Z"
-    output: "Delivered as assistant message to user"
+    started_at: "2026-05-14T00:00:00Z"
+    completed_at: "2026-05-14T01:00:00Z"
+    output: ".handoffs/po-approval-summary.md"
     notes: |
-      No .logs/, .handoffs/, or .features/ directories exist yet — no prior pipeline sessions have run.
-      .scratch/ did not exist — created by this session.
-      .spec/ exists with aggregates and bounded-context docs.
-      .spec/api-contracts.md now confirmed to exist and is fully written.
+      Three .feature files produced (10 scenarios total):
+        - .features/extension-auth-signin.feature (5 scenarios)
+        - .features/extension-auth-signout.feature (2 scenarios)
+        - .features/extension-auth-token-plumbing.feature (3 scenarios)
+      Approval summary at .handoffs/po-approval-summary.md.
 
-  context-read:
-    description: Read all existing service code, contracts, and agent personas in preparation for backend agent invocation
+  phase1-gate1:
+    description: "Gate 1: PO/PM approval of Gherkin feature files"
     status: complete
-    started_at: "2026-04-29T00:30:00Z"
-    completed_at: "2026-04-29T01:00:00Z"
-    output: "In-memory: all service structures, go.mod files, existing tests, domain types, and LLM provider pattern"
-    notes: |
-      source-evaluator: domain (Source, DetermineState, ClassifyURL) implemented and tested. HTTP handler is a stub.
-      annotator: domain (TensionRating, Label) implemented and tested. HTTP handler is a stub.
-      gateway: chi router, auth middleware (JWT stub), rate limiting live. Pipeline stops after claim-extractor.
-      claim-extractor: fully implemented — provider interface pattern confirmed (anthropic/openai/google/ollama).
-      All assembled agent personas confirmed present in .claude/agents/assembled/.
-
-  backend-task1-source-evaluator:
-    description: Invoke backend agent to implement source-evaluator /evaluate HTTP handler + Google CSE adapter + stubs + fsnotify hot-reload + paywall detection + weekly re-check goroutine
-    status: in-progress
-    started_at: "2026-04-29T02:00:00Z"
-    completed_at: null
+    started_at: "2026-05-14T01:00:00Z"
+    completed_at: "2026-05-14T02:00:00Z"
     output: null
     notes: |
-      Gate: .handoffs/source-evaluator-evaluate.md must exist and all Go tests must pass before Task 2 begins.
-      Issues in scope: BE-001 only (source-evaluator).
-      As of 2026-05-05 resume: significant partial implementation found in untracked files.
-      Completed packages (untracked, uncommitted):
-        - internal/domain/claim.go — Claim, CommentaryItem, EvaluatedClaim types
-        - internal/domain/source.go — Source, Tier, DetermineState (pre-existing, tested)
-        - internal/registry/classifier.go — ClassifyURL (pre-existing, tested)
-        - internal/registry/loader.go — hot-reload Loader with fsnotify + atomic pointer
-        - internal/commentary/classifier.go — IsCommentary() social/forum domain detection
-        - internal/paywall/detector.go — IsAccessible() + StartWeeklyRechecker()
-        - internal/search/provider.go — Provider interface + Config + Result types
-        - internal/search/factory.go — ConfigFromEnv() + New() provider factory
-        - internal/search/googlecse.go — GoogleCSEProvider implementation
-        - internal/search/brave.go, bing.go, serpapi.go, duckduckgo.go — other provider stubs
-      MISSING (still needed to reach gate):
-        - cmd/server/main.go only has a /healthz stub — no /evaluate handler wired up
-        - No HTTP handler package (e.g., internal/handler/ or internal/evaluate/)
-        - No integration of Loader, search.Provider, paywall.Detector, commentary.IsCommentary
-        - go.mod missing fsnotify dependency (require github.com/fsnotify/fsnotify)
-        - No handler_test.go or integration tests for /evaluate
-      Backend agent re-invoked 2026-05-05 to complete the handler and wire everything.
-      Both CI blockers (TypeScript mismatches, deploy-annotator GCR) deferred by PM — do not address here.
+      Gate 1 APPROVED by PM with two confirmed assumptions:
+      1. Display name shown in popup, fall back to primary email if no display name set.
+      2. "Analysis blocked when no session exists" scenario covers session-expiry-mid-use case.
+      No new scenarios needed.
 
-  devops-gcr-fix:
-    description: Fix GCR login failure in all four GKE deploy workflows — replace broken gcloud auth print-access-token pipe with setup-gcloud@v2 + configure-docker
+  phase2-architect:
+    description: "Architect produces spec artifacts for Extension Auth (Clerk OAuth)"
     status: complete
-    started_at: "2026-05-05T13:00:00Z"
-    completed_at: "2026-05-05T17:00:00Z"
-    output: "All four deploy workflow files updated on disk"
+    started_at: "2026-05-14T02:00:00Z"
+    completed_at: "2026-05-14T12:00:00Z"
+    output: ".handoffs/architect-approval-summary.md"
     notes: |
-      Files fixed:
-        - .github/workflows/deploy-annotator.yml
-        - .github/workflows/deploy-source-evaluator.yml
-        - .github/workflows/deploy-claim-extractor.yml
-        - .github/workflows/deploy-gateway.yml
-      Change: replaced `gcloud auth print-access-token | docker login` with
-        `setup-gcloud@v2` action + `gcloud auth configure-docker gcr.io --quiet`.
-      deploy-annotator GCR login blocker is now RESOLVED.
+      Phase 2 artifacts produced:
+        - .spec/glossary.md: ExtensionAuth terms added (7 new terms + userToken as Retired Term)
+        - .spec/bounded-contexts/extension-auth.md: DEC-011 reference corrected to DEC-013
+        - .spec/issues/ISS-001-clerk-provider-popup-entrypoint.md (S, no deps)
+        - .spec/issues/ISS-002-popup-auth-conditional-rendering.md (M, depends ISS-001)
+        - .spec/issues/ISS-003-handler-clerk-jwt-plumbing.md (M, depends ISS-001)
+        - .logs/decisions.md: DEC-013 logged
+        - CLAUDE.md: Architecture Conventions + Directory Structure filled in
+        - .handoffs/architect-approval-summary.md: Gate 2 artifact
 
-  backend-task2-annotator:
-    description: Invoke backend agent to implement annotator /annotate HTTP handler + LLM provider pattern + tension score computation
-    status: in-progress
-    started_at: "2026-05-05T18:10:00Z"
-    completed_at: null
+      Note: bounded context referenced background token acquisition decision as "DEC-011"
+      but DEC-011 was already taken (selection-analysis session). Formally logged as DEC-013.
+      Bounded context file updated to reference DEC-013.
+
+      No new API endpoints. No backend issues. 3 frontend-only issues.
+      ISS-002 and ISS-003 can run in parallel after ISS-001.
+
+  phase2-gate2:
+    description: "Gate 2: Tech Lead approval of architect spec artifacts"
+    status: complete
+    started_at: "2026-05-14T12:00:00Z"
+    completed_at: "2026-05-14T13:00:00Z"
     output: null
-    notes: |
-      Gate: .handoffs/annotator-annotate.md + tests pass.
-      Depends on: backend-task1-source-evaluator complete.
+    notes: "Gate 2 APPROVED by PM 2026-05-14."
 
-  backend-task3-gateway:
-    description: Invoke backend agent to implement gateway full pipeline wiring + new endpoints + Clerk JWT + provider key validation
+  phase3-qa-strategist:
+    description: "QA Strategist produces test plan for Extension Auth feature area"
+    status: complete
+    started_at: "2026-05-14T13:00:00Z"
+    completed_at: "2026-05-14T14:00:00Z"
+    output: ".test-plans/extension-auth.md"
+    notes: |
+      20 test cases produced (TC-001 through TC-020).
+      All 10 Gherkin scenarios mapped in coverage table.
+      Coverage validated — 10/10 scenarios present.
+      1 decision logged: DEC-016 (loading state UI deferred to PM).
+      2 gaps documented: GAP-001 (loading UI), GAP-002 (getToken null vs session null).
+      GAP-001 requires PM response before Test Engineer can write positive loading-state assertion.
+      Handoff: .handoffs/qa-phase3-summary.md
+
+  phase4-test-engineer-phase1:
+    description: "Test Engineer (Phase 1): write failing tests from test plan — all tests must fail"
+    status: complete
+    started_at: "2026-05-14T14:00:00Z"
+    completed_at: "2026-05-15T00:00:00Z"
+    output: ".test-reports/phase1-2026-05-15.md"
+    notes: |
+      Test files written and confirmed present:
+        - ui/extension/src/popup/Popup.test.tsx (24 tests — all fail as expected)
+        - ui/extension/src/background/handler.test.ts (14 tests — 12 fail, 2 unexpected passes)
+        - ui/extension/src/background/index.test.ts (4 tests — 3 fail, 1 unexpected pass)
+
+      Suite results: 48 total, 39 fail (expected), 9 pass.
+        - 6 passes are pre-existing context/detector.test.ts (not new tests)
+        - 3 new tests pass unexpectedly — all are regression guards:
+          TC-016-b: index.ts does not access userToken (already true, index.ts never had userToken)
+          TC-016-c: gatewayUrl present in handler.ts (already true, handler.ts reads gatewayUrl)
+          TC-020-a: importing background/index does not throw (module loads fine pre-ISS-003)
+
+      Phase 1 report: .test-reports/phase1-2026-05-15.md
+      Handoff: .handoffs/test-engineer-phase1-summary.md
+
+      GATE 3 APPROVED 2026-05-19: 3 passing tests retained as pre-condition guards (not linked to ISS-001/002/003). 39 failing tests cover all new behavior. Cleared by Tech Lead.
+
+      Additional note: TC-020-b fails due to ES module caching (correct Gate 3 behavior)
+      but will need infrastructure fix in Phase 2 (vi.resetModules() before dynamic imports).
+
+  phase5-iss001:
+    description: "Frontend Engineer implements ISS-001: ClerkProvider popup entrypoint wrap"
+    status: complete
+    started_at: "2026-05-15T10:00:00Z"
+    completed_at: "2026-05-19T00:00:00Z"
+    output:
+      - ui/extension/src/popup/main.tsx
+      - ui/extension/tsconfig.json
+      - .handoffs/frontend-completion-ISS-001.md
+    notes: |
+      ClerkProvider wrap implemented in main.tsx. PublishableKey invariant enforced at startup.
+      tsconfig.json updated to include vite/client types (DEC-017).
+      Test baseline unchanged: 39 fail | 9 pass (48 total).
+      TC-001 through TC-013 still fail — ISS-002 (useAuth/useUser in Popup.tsx) will make them pass.
+
+  phase5-iss002:
+    description: "Frontend Engineer implements ISS-002: Popup.tsx SignInPrompt/AnalyseView conditional rendering"
     status: pending
     started_at: null
     completed_at: null
     output: null
-    notes: |
-      Gate: .handoffs/gateway-pipeline.md + tests pass.
-      Depends on: backend-task2-annotator complete.
+    notes: "Depends on ISS-001 (now complete). Can run in parallel with ISS-003."
 
-  backend-task4-test-verification:
-    description: Invoke test agent to verify all Go tests pass across all backend services
+  phase5-iss003:
+    description: "Frontend Engineer implements ISS-003: background handler Clerk JWT plumbing"
     status: pending
     started_at: null
     completed_at: null
     output: null
-    notes: |
-      Gate: .handoffs/backend-tests.md with all green.
-      Depends on: backend-task3-gateway complete.
+    notes: "Depends on ISS-001 (now complete). Can run in parallel with ISS-002."
 
-  status-check-2026-05-05:
-    description: Full project status check — CI, git, handoffs, session state
-    status: complete
-    started_at: "2026-05-05T00:00:00Z"
-    completed_at: "2026-05-05T00:00:00Z"
-    output: "Delivered as assistant message to user"
+gates:
+  gate1:
+    status: approved
+    artifact: ".handoffs/po-approval-summary.md"
+    approved_at: "2026-05-14T02:00:00Z"
+    notes: "PM approved with two confirmed assumptions"
+  gate2:
+    status: approved
+    artifact: ".handoffs/architect-approval-summary.md"
+    approved_at: "2026-05-14T13:00:00Z"
+    notes: "Gate 2 APPROVED by PM 2026-05-14."
+  gate3:
+    status: approved
+    artifact: ".test-reports/phase1-2026-05-15.md"
+    approved_at: "2026-05-19T00:00:00Z"
     notes: |
-      CI failures found on latest push (commit 70261c8 "finalized specs"):
-        - extension: TypeScript type errors — SourceResult missing relevanceScore/divergenceScore; TensionRating has no 'numerator' field
-        - web: same TypeScript type errors as extension
-        - sdk: AnalyzeResponse missing failedClaims/sessionStats fields
-        - deploy-annotator: GCR login failure (infra/auth issue)
-        - deploy-web: skipped
-        - deploy-extension: skipped
-        - annotator service CI: passed
-        - gateway service CI: not in recent run list (assumed passing or not triggered)
-      No open PRs.
-      Assembled agent personas: all present but modified (not committed).
-      New delegate-question-or-bug skill added (untracked).
-      No .handoffs/, no .logs/, no .features/ directories.
+      39 tests fail as expected. 3 tests pass (TC-016-b, TC-016-c, TC-020-a) — retained as
+      pre-condition guards, not linked to new ISS behavior. Cleared by Tech Lead 2026-05-19.
+      39 of 42 new tests fail as expected.
 
-  resume-check-2026-05-05:
-    description: Read all partial source-evaluator files and determine exact gap to completion
-    status: complete
-    started_at: "2026-05-05T12:00:00Z"
-    completed_at: "2026-05-05T12:00:00Z"
-    output: "Delivered as assistant message to user"
-    notes: |
-      All supporting packages are implemented. The sole remaining gap is:
-        1. /evaluate HTTP handler (new package needed)
-        2. main.go wiring of Loader, search.Provider, paywall.Detector into the handler
-        3. go.mod must add github.com/fsnotify/fsnotify dependency
-        4. Handler tests (httptest-based) for /evaluate
+active_tasks:
+  - id: "phase5-iss002"
+    agent: "Frontend Engineer"
+    started_at: "2026-05-19T00:00:00Z"
+  - id: "phase5-iss003"
+    agent: "Frontend Engineer"
+    started_at: "2026-05-19T00:00:00Z"
 
-  backend-task1-reinvoke-2026-05-05:
-    description: Re-invoke backend agent to complete source-evaluator — /evaluate handler, main.go wiring, fsnotify dep, handler tests
-    status: complete
-    started_at: "2026-05-05T13:00:00Z"
-    completed_at: "2026-05-05T18:03:49Z"
-    output: ".handoffs/source-evaluator-evaluate.md"
-    notes: |
-      FILES WRITTEN and VERIFIED:
-        - services/source-evaluator/internal/handler/evaluate.go
-        - services/source-evaluator/internal/handler/evaluate_test.go
-        - services/source-evaluator/cmd/server/main.go (fully wired, port 8082)
-        - services/source-evaluator/go.mod (fsnotify v1.7.0)
-        - services/source-evaluator/go.sum (generated by go mod tidy)
-      go mod tidy: PASS
-      go build ./...: PASS
-      go test ./...: PASS — 23 assertions across domain, handler, registry packages
-      Gate artifact written: .handoffs/source-evaluator-evaluate.md
-      PM installed Go via brew install go which unblocked toolchain verification.
+artifacts:
+  - path: ".features/extension-auth-signin.feature"
+    produced_by: "PO Agent"
+    phase: 1
+  - path: ".features/extension-auth-signout.feature"
+    produced_by: "PO Agent"
+    phase: 1
+  - path: ".features/extension-auth-token-plumbing.feature"
+    produced_by: "PO Agent"
+    phase: 1
+  - path: ".handoffs/po-approval-summary.md"
+    produced_by: "Orchestrator (PO Agent summary)"
+    phase: 1
+  - path: ".spec/glossary.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".spec/bounded-contexts/extension-auth.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".spec/issues/ISS-001-clerk-provider-popup-entrypoint.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".spec/issues/ISS-002-popup-auth-conditional-rendering.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".spec/issues/ISS-003-handler-clerk-jwt-plumbing.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".logs/decisions.md"
+    produced_by: "Architect (DEC-013 appended)"
+    phase: 2
+  - path: "CLAUDE.md"
+    produced_by: "Architect (Architecture Conventions + Directory Structure)"
+    phase: 2
+  - path: ".handoffs/architect-approval-summary.md"
+    produced_by: "Architect"
+    phase: 2
+  - path: ".test-plans/extension-auth.md"
+    produced_by: "QA Strategist"
+    phase: 3
+  - path: ".handoffs/qa-phase3-summary.md"
+    produced_by: "QA Strategist"
+    phase: 3
+  - path: ".logs/decisions.md"
+    produced_by: "QA Strategist (DEC-016 appended)"
+    phase: 3
+  - path: "ui/extension/src/popup/Popup.test.tsx"
+    produced_by: "Test Engineer (Phase 1)"
+    phase: 4
+  - path: "ui/extension/src/background/handler.test.ts"
+    produced_by: "Test Engineer (Phase 1)"
+    phase: 4
+  - path: "ui/extension/src/background/index.test.ts"
+    produced_by: "Test Engineer (Phase 1)"
+    phase: 4
+  - path: ".test-reports/phase1-2026-05-15.md"
+    produced_by: "Orchestrator (phase 1 report)"
+    phase: 4
+  - path: ".handoffs/test-engineer-phase1-summary.md"
+    produced_by: "Orchestrator (Test Engineer handoff)"
+    phase: 4
 
-  extension-error-visibility-fix:
-    description: Fix silent failure in Chrome extension — popup shows no feedback when "Analyze this page" clicked; errors not surfaced in popup or sidebar
-    status: complete
-    started_at: "2026-05-11T15:20:00Z"
-    completed_at: "2026-05-11T15:29:00Z"
-    output: null
-    notes: |
-      Delegated to Frontend Engineer (focused invocation).
-      Files changed:
-        - ui/extension/src/popup/Popup.tsx
-        - ui/extension/src/sidebar/Sidebar.tsx
-        - ui/extension/src/styles/sidebar.css
-      Build: PASS (tsc + vite, 0 type errors)
-      Tests: 6/6 PASS
-      Key fix: chrome.runtime.lastError guard in handleAnalyze; broadcastError() helper;
-               SHOW_ERROR handler in Sidebar; sidebar__error CSS rule; runtime broadcast for sidebar.
-      Decision DEC-006 logged: popup-to-sidebar channel must use chrome.runtime.sendMessage.
-      Commit and push: PENDING (user requested)
-
-  extension-messaging-bug-fix:
-    description: Debug and fix remaining popup/sidebar messaging failure — popup shows done immediately; sidebar stays idle after commit 6c4e851
-    status: complete
-    started_at: "2026-05-11T16:00:00Z"
-    completed_at: "2026-05-11T16:15:00Z"
-    output: null
-    notes: |
-      Root cause 1 (sidebar stays idle): sidepanel not open when SHOW_ERROR is broadcast.
-        Fix: open sidepanel + send ANALYSIS_STARTED at START of handleAnalyze, before RUN_ANALYSIS.
-      Root cause 2 (unreliable content→background messaging): Promise form of
-        chrome.runtime.sendMessage resolves undefined in some MV3 environments when
-        background calls sendResponse asynchronously; no .catch() on runAnalysis().then(sendResponse)
-        left popup stuck on cold SW rejection.
-        Fix: callback form wrapped in new Promise in runAnalysis(); .catch() added.
-      Files changed:
-        - ui/extension/src/popup/Popup.tsx
-        - ui/extension/src/content/index.ts
-      Build: PASS (tsc + vite, 0 errors)
-      Tests: 6/6 PASS
-      Decisions: DEC-007, DEC-008
-
-  extension-sidebar-race-condition-fix:
-    description: >
-      Fix MV3 race condition — sidepanel not loaded before ANALYSIS_STARTED broadcast,
-      causing "Could not establish connection. Receiving end does not exist." error.
-      Root causes: (1) sidePanel.open() not awaited before sendMessage; (2) chrome.runtime.sendMessage
-      calls to sidebar not guarded when sidebar is closed; (3) sidebar reads state only from
-      runtime messages, missing messages sent before React mount.
-    status: in-progress
-    started_at: "2026-05-11T17:00:00Z"
-    completed_at: null
-    output: null
-    notes: |
-      Fix strategy: use chrome.storage.session as source of truth written by popup,
-      read by sidebar on mount. Wrap all popup→sidebar chrome.runtime.sendMessage calls
-      in safeBroadcast() that suppresses "Receiving end does not exist". Add onMessage
-      cleanup in Sidebar useEffect.
-      Files to change: ui/extension/src/popup/Popup.tsx, ui/extension/src/sidebar/Sidebar.tsx
-      Files NOT to change: content/index.ts, background/index.ts, manifest.json, any test files.
+blocked_on: null
 
 blockers:
   - description: |
-      TypeScript type mismatches blocking extension, web, and SDK CI. The @shirajitsu/types package
-      (shared/types) was updated in specs (adding relevanceScore, divergenceScore to SourceResult;
-      removing numerator from TensionRating; adding failedClaims/sessionStats to AnalyzeResponse)
-      but the consuming code in ui/extension, ui/web, and sdk/core has not been updated to match.
-    raised_at: "2026-05-05T00:00:00Z"
-    resolved_at: "2026-05-06T00:00:00Z"
-    deferred: false
-    resolution: "Fixed by frontend-types-fix task."
-  - description: |
-      deploy-annotator CI fails at GCR login step. Likely a credential or registry URL configuration
-      issue in the deploy-annotator.yml workflow.
-    raised_at: "2026-05-05T00:00:00Z"
-    resolved_at: "2026-05-05T17:00:00Z"
-    deferred: false
-    resolution: |
-      Fixed by devops-gcr-fix task. All four deploy workflow files updated to use
-      setup-gcloud@v2 + gcloud auth configure-docker gcr.io --quiet.
-  - description: |
-      Go toolchain (go binary) is not in the PATH available to Claude Code agents on this machine.
-      As a result, go mod tidy, go build ./..., and go test ./... cannot be executed automatically
-      after implementation files are written. go.sum cannot be populated by the agent.
-      This blocks automated gate verification for all Go service tasks.
-    raised_at: "2026-05-05T17:00:00Z"
-    resolved_at: null
-    deferred: false
-    blocking_task: backend-task1-reinvoke-2026-05-05
-    action_required: |
-      PM must manually run in services/source-evaluator/:
-        1. go mod tidy
-        2. go build ./...
-        3. go test ./...
-      If all three succeed, create .handoffs/source-evaluator-evaluate.md to signal gate passage.
-      Then notify orchestrator to proceed to backend-task2-annotator.
+      Gate 3 blocked: 3 new tests pass pre-implementation.
+      TC-016-b: index.ts does not access userToken — PASSES (invariant already true)
+      TC-016-c: gatewayUrl present in handler.ts — PASSES (invariant already true)
+      TC-020-a: importing background/index does not throw — PASSES (module has no syntax errors)
+      All three are regression guard assertions. They protect properties already present
+      and will remain passing after implementation.
+      Decision required: Accept (Option A) or revise tests (Option B).
+    raised_at: "2026-05-15T00:00:00Z"
+    resolved_at: "2026-05-19T00:00:00Z"
+
+notes: |
+  Session: Extension Auth (Clerk OAuth) feature pipeline.
+  Requirements brief: .handoffs/requirements-brief.md
+  Gate 1 approved by PM 2026-05-14.
+  Gate 2 approved by PM 2026-05-14.
+  Phase 3 complete 2026-05-14. Test plan validated: 10/10 Gherkin scenarios mapped.
+  Phase 4 started 2026-05-14. Test files written 2026-05-15.
+  Gate 3 approved 2026-05-19.
+  Phase 5 started 2026-05-15. ISS-001 in progress.
+
+  Suite run: 48 tests total. 39 fail (expected). 9 pass.
+    6 passes = pre-existing context/detector.test.ts (not counted against Gate 3)
+    3 passes = new tests that are regression guards (Gate 3 approved with option A)
+
+  Additional Phase 2 note: TC-020-b will likely continue to fail post-implementation
+  due to ES module caching. Test Engineer must address with vi.resetModules() in Phase 2.
+
+  Prior session (impl-phase1-2026-04-29) completed:
+    - source-evaluator /evaluate handler + tests
+    - annotator /annotate handler + LLM tension scoring + tests
+    - gateway full pipeline wiring + Clerk JWT verification + provider key validation + tests
+    - extension bug fixes: error visibility, messaging race condition, MV3 sidepanel timing
+
+  Decision ID note: bounded context referenced background token acquisition as DEC-011
+  but that ID was taken by selection-analysis session PO Agent. Logged as DEC-013.
+  Bounded context updated accordingly.

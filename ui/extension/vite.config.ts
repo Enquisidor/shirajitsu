@@ -8,6 +8,8 @@ import { resolve } from 'path'
 export default defineConfig({
   test: {
     environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
   },
   plugins: [react()],
   // root=src so HTML entrypoints output at popup/index.html and sidepanel/index.html

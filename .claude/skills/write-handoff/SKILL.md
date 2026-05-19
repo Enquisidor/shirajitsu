@@ -19,7 +19,7 @@ allowed-tools: Read Write
 
 3. **Confirm the path** written to the orchestrator or calling context so it can be referenced in session state and gate messages.
 
-4. **Stop.** Your task is complete. Do not re-read the handoff file to verify it. Do not check other artifacts. Return control to the orchestrator and wait.
+4. **Stop.** Your task is complete. Do not re-read the summary. Do not scan for anything you might have missed. Return control to the orchestrator and wait.
 
 ## Rules
 

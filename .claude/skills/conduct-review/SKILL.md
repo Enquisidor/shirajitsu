@@ -41,6 +41,18 @@ Never assign FAIL solely on P2 or P3 findings. Never assign PASS when P0 or P1 f
 
 ---
 
-## Stop after the verdict
+## Sign off after the verdict
 
-Once the verdict block is written, you are done. Do not continue reading files. Do not start a second pass of the checklist. Do not add findings after the verdict. Do not summarize your findings in prose after writing the verdict block. The verdict block is the final output — return control to the orchestrator immediately after writing it.
+The verdict block above is your second-to-last output. Immediately after it, output this sign-off block — substituting the actual values — then stop. Do not produce any further output after this block.
+
+```
+---
+SIGNED OFF
+Agent: [reviewer role]
+Status: [PASS | PASS-WITH-FINDINGS | FAIL]
+Findings: [n] P0, [n] P1, [n] P2, [n] P3
+Issue IDs: [list or "None"]
+---
+```
+
+Do not re-read log files, re-scan input files, or re-run your checklist after sending this. Your turn is over.

@@ -3,10 +3,9 @@ name: po-signoff
 description: Reviews PRs against Gherkin acceptance criteria to verify the implementation satisfies the product specification. Delegate as the final review gate before merge approval.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # PO Sign-off Agent
@@ -132,3 +131,16 @@ When the verdict is BLOCKED or NEEDS-CLARIFICATION, the escalation items section
 ```
 
 Vague escalations ("needs more review", "unclear implementation") are not acceptable. Each item must be specific enough for the implementer to know exactly what to fix or demonstrate.
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---

@@ -1,0 +1,157 @@
+agent: orchestrator
+session_id: selection-analysis-2026-05-15
+last_updated: "2026-05-19T00:00:00Z"
+status: active
+
+current_phase: 2
+
+current_task: "Gate 2 — awaiting Tech Lead / PM approval of architect spec artifacts"
+
+tasks:
+  phase1-po-gherkin:
+    description: PO Agent authors Gherkin feature files from .handoffs/requirements-brief-selection-analysis.md
+    status: complete
+    started_at: "2026-05-14T00:00:00Z"
+    completed_at: "2026-05-15T00:00:00Z"
+    output:
+      - .features/selection-popup.feature
+      - .features/selection-inline-highlights.feature
+    notes: |
+      Two feature files produced (16 scenarios total):
+        - selection-popup.feature: 11 scenarios (CTA detection, selection reactivity, submission routing)
+        - selection-inline-highlights.feature: 5 scenarios (highlight anchoring for selection vs. whole-page)
+      Orchestrator killed before session state was written — recovered 2026-05-15.
+
+  phase1-po-gherkin-revision:
+    description: PO Agent revises/extends Gherkin to cover highlight color selection, selection preprocessing, and per-selection model settings per PM revision instructions
+    status: complete
+    started_at: "2026-05-15T01:00:00Z"
+    completed_at: "2026-05-15T02:00:00Z"
+    output:
+      - .features/selection-popup.feature
+      - .features/selection-settings.feature
+      - .handoffs/po-approval-summary-selection-analysis.md
+    notes: |
+      Revision produced:
+        - selection-popup.feature: updated to 15 scenarios (added 4 preprocessing scenarios)
+        - selection-settings.feature: new file, 8 scenarios (highlight color x4, per-selection model x4)
+        - selection-inline-highlights.feature: unchanged at 5 scenarios
+        - Total: 28 scenarios across 3 files
+      DEC-014 and DEC-015 logged. Activity log entries written for both phase1-po-gherkin and revision.
+
+  phase1-gate1:
+    description: "Gate 1: PM approval of Gherkin"
+    status: complete
+    started_at: "2026-05-15T00:00:00Z"
+    completed_at: "2026-05-15T03:00:00Z"
+    output: .handoffs/po-approval-summary-selection-analysis.md
+    notes: |
+      First submission rejected by PM — revision requested.
+      Revised Gherkin approved by PM 2026-05-15.
+      PM-confirmed constraints:
+        - Minimum selection length: 5 words (word count, not character count)
+        - Highlight color layering: user-chosen color as background, risk-level color as border/outline
+        - Per-selection model picker: show only models configured in the user's global settings
+
+  phase2-architect:
+    description: Architect produces domain model updates, glossary extensions, implementation issues for Selection-Based Analysis feature
+    status: complete
+    started_at: "2026-05-15T04:00:00Z"
+    completed_at: "2026-05-19T00:00:00Z"
+    output:
+      - .spec/bounded-contexts/selection-analysis.md
+      - .spec/issues/ISS-004-selection-capture-content-script.md
+      - .spec/issues/ISS-005-popup-selection-cta-adaptation.md
+      - .spec/issues/ISS-006-inline-highlighter-selection-mode.md
+      - .spec/issues/ISS-007-highlight-color-settings-ui.md
+      - .spec/issues/ISS-008-per-selection-model-picker.md
+      - .logs/decisions.md (DEC-018 through DEC-022)
+      - .handoffs/architect-approval-summary-selection-analysis.md
+    notes: |
+      5 implementation issues produced (ISS-004 through ISS-008). All frontend-only.
+      Dependency order: ISS-004 and ISS-007 (no deps, parallel) → ISS-005 → ISS-008 (parallel with ISS-006 after ISS-007 merged)
+      DEC-018: 5-word SelectionLengthGuard threshold — requires PM confirmation
+      DEC-019: SELECTION_CHANGED reactive updates, 150ms debounce
+      DEC-020: Settings UI in collapsible popup section (no separate options page)
+      DEC-021: Highlight layering — backgroundColor + CSS outline
+      DEC-022: Show all SUPPORTED_MODELS in per-selection picker (MVP limitation)
+      Decisions and handoff written by orchestrator (architect killed mid-write twice).
+
+  phase2-gate2:
+    description: "Gate 2: Tech Lead / PM approval of architect spec artifacts"
+    status: awaiting-approval
+    started_at: "2026-05-19T00:00:00Z"
+    completed_at: null
+    output: .handoffs/architect-approval-summary-selection-analysis.md
+    notes: |
+      Open question: DEC-018 — PM should confirm 5-word SelectionLengthGuard threshold.
+      All other decisions are Architect-level (no PM sign-off needed).
+
+blockers: []
+
+gates:
+  gate1:
+    name: PO/PM approval
+    status: approved
+    approved_at: "2026-05-15T03:00:00Z"
+    artifact: .handoffs/po-approval-summary-selection-analysis.md
+  gate2:
+    name: Tech Lead approval
+    status: awaiting-approval
+    artifact: .handoffs/architect-approval-summary-selection-analysis.md
+    notes: |
+      Open question for PM: confirm 5-word SelectionLengthGuard threshold (DEC-018).
+      If approved, QA Strategist proceeds next.
+  gate3:
+    name: Tests all failing
+    status: pending
+    artifact: null
+  gate4:
+    name: Tests all passing
+    status: pending
+    artifact: null
+  gate5:
+    name: Review pipeline clean
+    status: pending
+    artifact: null
+
+artifacts:
+  - path: .features/selection-popup.feature
+    produced_by: PO Agent
+    phase: 1
+    note: Updated in revision — now 15 scenarios
+  - path: .features/selection-inline-highlights.feature
+    produced_by: PO Agent
+    phase: 1
+    note: Unchanged — 5 scenarios
+  - path: .features/selection-settings.feature
+    produced_by: PO Agent
+    phase: 1
+    note: New in revision — 8 scenarios (highlight color + per-selection model)
+  - path: .handoffs/po-approval-summary-selection-analysis.md
+    produced_by: PO Agent
+    phase: 1
+    note: Updated in revision — Gate 1 re-submission artifact
+  - path: .spec/bounded-contexts/selection-analysis.md
+    produced_by: Architect
+    phase: 2
+  - path: .spec/issues/ISS-004-selection-capture-content-script.md
+    produced_by: Architect
+    phase: 2
+  - path: .spec/issues/ISS-005-popup-selection-cta-adaptation.md
+    produced_by: Architect
+    phase: 2
+  - path: .spec/issues/ISS-006-inline-highlighter-selection-mode.md
+    produced_by: Architect
+    phase: 2
+  - path: .spec/issues/ISS-007-highlight-color-settings-ui.md
+    produced_by: Architect
+    phase: 2
+  - path: .spec/issues/ISS-008-per-selection-model-picker.md
+    produced_by: Architect
+    phase: 2
+  - path: .handoffs/architect-approval-summary-selection-analysis.md
+    produced_by: Orchestrator (on behalf of Architect)
+    phase: 2
+
+active_tasks: []

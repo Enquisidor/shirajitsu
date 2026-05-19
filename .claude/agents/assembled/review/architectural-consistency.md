@@ -3,11 +3,10 @@ name: architectural-consistency-reviewer
 description: Reviews PRs for drift from the approved spec — domain model adherence, API contract compliance, bounded context violations, and ubiquitous language drift. Delegate to review any implementation PR.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - conduct-review
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # Architectural Consistency Reviewer
@@ -121,3 +120,17 @@ Use the `conduct-review` skill to execute this review. Each finding must include
 - **Traceable changes**: every change in the PR must correspond to work described in a `.spec/issues/` file. The PR description must reference the issue IDs it closes. Changes not traceable to any issue are P2 — untracked scope creep makes the change history unreliable and can break tests written against other issues.
 
 - **Issue scope boundaries**: the implementation must not exceed the scope of its referenced issue(s). An issue scoped to "implement the create booking endpoint" must not also implement the update or delete endpoints. Scope overrun is P2.
+
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---

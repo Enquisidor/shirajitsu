@@ -8,7 +8,7 @@ The Architect owns and maintains this file. All agents must use the canonical te
 
 ## How to use this glossary
 
-- Every term used in `.spec/api-contracts.md`, `.spec/bounded-contexts/`, `.spec/aggregates/`, or any implementation issue must have an entry here.
+- Every term used in `.spec/api-contracts.md`, `.spec/bounded-contexts/`, `.spec/aggregates/`, or any implementation issue must appear in the glossary.
 - When writing code: use the canonical identifier exactly (PascalCase for types, camelCase for fields in Go/TS). No abbreviations, synonyms, or informal variations.
 - When in doubt about a term: check this file before inventing a name.
 
@@ -185,12 +185,260 @@ Terms with consistent meaning across all bounded contexts.
 
 ---
 
+### ExtensionAuth
+
+---
+
+#### ClerkSession · ExtensionAuth
+
+**Definition:** The active Clerk user session managed by `@clerk/chrome-extension`. Either active (user is signed in) or absent (user is not signed in). The extension does not own the session lifecycle — it observes and reacts to it via the Clerk SDK. A ClerkSession is the aggregate root of the ExtensionAuth bounded context.
+
+**Canonical identifier in code:** `ClerkSession` (type), Clerk SDK's `useAuth()` hook (`isSignedIn` field), `clerk.session` (background)
+
+**Anti-patterns (DO NOT USE):**
+- "auth state": use ClerkSession
+- "login session": use ClerkSession
+- "token state": use ClerkSession
+
+---
+
+#### ClerkJwt · ExtensionAuth
+
+**Definition:** An opaque signed JSON Web Token obtained from the active ClerkSession via `getToken()`. Used as the value of the `Authorization: Bearer` header on analysis requests. Immutable per issuance. Never stored to disk — obtained fresh from the Clerk SDK instance on each analysis request.
+
+**Canonical identifier in code:** `ClerkJwt` (type alias for `string`), obtained via `clerk.session.getToken()` or `getToken()` from `useAuth()`
+
+**Invariant:** A ClerkJwt MUST NOT be read from `chrome.storage.sync`. The legacy `userToken` key in `chrome.storage.sync` is retired by this feature.
+
+**Anti-patterns (DO NOT USE):**
+- "userToken": retired; the `chrome.storage.sync['userToken']` path is removed by ISS-003
+- "auth token": use ClerkJwt
+- "bearer token": use ClerkJwt
+
+---
+
+#### ClerkPublishableKey · ExtensionAuth
+
+**Definition:** The Clerk publishable key used to initialise the Clerk SDK instances in the popup and background entrypoints. Injected at build time via `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY`. Immutable per build. Not a secret — safe to embed in the extension bundle.
+
+**Canonical identifier in code:** `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY` (Vite env var)
+
+**Invariant:** The extension MUST NOT start a Clerk SDK instance if this value is undefined.
+
+**Anti-patterns (DO NOT USE):**
+- "API key": use ClerkPublishableKey
+- "Clerk key": use ClerkPublishableKey
+- "publishable key": use full compound form ClerkPublishableKey
+
+---
+
+#### SignedInIdentity · ExtensionAuth
+
+**Definition:** The user display string shown in the popup when a ClerkSession is active. Computed at display time from the ClerkSession: uses the user's display name if set, otherwise falls back to the user's primary email address. PM-confirmed fallback behaviour (Gate 1 approval).
+
+**Canonical identifier in code:** `SignedInIdentity` (type alias for `string`), derived from `user.fullName ?? user.primaryEmailAddress?.emailAddress`
+
+**Anti-patterns (DO NOT USE):**
+- "username": use SignedInIdentity
+- "user info": use SignedInIdentity
+- "profile": use SignedInIdentity
+
+---
+
+#### SignInPrompt · ExtensionAuth
+
+**Definition:** The UI state rendered in the popup when no ClerkSession is active. Displays the Shirajitsu branding and a "Sign in" button that launches the OAuthPopup. Mutually exclusive with AnalyseView — exactly one is rendered at any time.
+
+**Canonical identifier in code:** `<SignInPrompt />` (React component)
+
+**Invariant:** The analyse controls MUST NOT be rendered when SignInPrompt is active.
+
+**Anti-patterns (DO NOT USE):**
+- "login screen": use SignInPrompt
+- "auth wall": use SignInPrompt
+- "unauthenticated state": use SignInPrompt
+
+---
+
+#### AnalyseView · ExtensionAuth
+
+**Definition:** The UI state rendered in the popup when a ClerkSession is active. Displays the analyse controls (CTA button, mode selector, model selector), the SignedInIdentity, and the "Sign out" button. Mutually exclusive with SignInPrompt — exactly one is rendered at any time.
+
+**Canonical identifier in code:** `<AnalyseView />` (React component, or conditional branch within `<Popup />`)
+
+**Invariant:** The SignInPrompt MUST NOT be rendered when AnalyseView is active.
+
+**Anti-patterns (DO NOT USE):**
+- "main view": use AnalyseView
+- "authenticated state": use AnalyseView
+- "dashboard": use AnalyseView
+
+---
+
+#### OAuthPopup · ExtensionAuth
+
+**Definition:** The Clerk-managed OAuth browser popup launched when the user clicks "Sign in". Controlled entirely by `@clerk/chrome-extension` via the `openSignIn()` or equivalent API — the extension initiates it but does not manage its lifecycle.
+
+**Canonical identifier in code:** launched via `@clerk/chrome-extension` sign-in API (e.g., `openSignIn()`)
+
+**Anti-patterns (DO NOT USE):**
+- "login popup": use OAuthPopup
+- "Clerk window": use OAuthPopup
+- "auth dialog": use OAuthPopup
+
+---
+
+### SelectionAnalysis
+
+Terms introduced by the Selection-Based Analysis feature (session: selection-analysis-2026-05-15).
+
+---
+
+#### SelectionContext · SelectionAnalysis
+
+**Definition:** The snapshot of the user's current text selection on the active page, captured by the content script and reported to the popup via `GET_CONTEXT`. Contains the selected text string, the word count of that text, and the DOM Range object used to build the SelectionCharacterMap. A SelectionContext is absent when the user has no text selected, when the selection contains only whitespace, or when the selection is empty.
+
+**Canonical identifier in code:** `SelectionContext` (type), `selection` (field on `DetectedContext` extension), `null` when no selection is present
+
+**Invariants:**
+- `text` must be non-empty and contain at least one non-whitespace character
+- `wordCount` must be ≥ 1
+- A `SelectionContext` with `wordCount < 5` is valid to capture but will fail the SelectionLengthGuard
+
+**Anti-patterns (DO NOT USE):**
+- "selected text": use SelectionContext (for the object) or `selection.text` (for the string value)
+- "highlight selection": ambiguous — "highlight" is a rendered element; "selection" is the user's browser text selection
+- "user selection": use SelectionContext
+
+---
+
+#### SelectionLengthGuard · SelectionAnalysis
+
+**Definition:** The validation rule that a SelectionContext's `wordCount` must be ≥ 5 (five words, PM-confirmed) before the popup permits submission of an "Analyze selection" request. When the guard fails, the popup renders a SelectionTooShortWarning and blocks the submit action. The guard is enforced in the popup at click time — not by the content script, not by the background, and not by the gateway.
+
+**Canonical identifier in code:** `selectionMeetsLengthRequirement(selection: SelectionContext): boolean` (pure function in popup helper module)
+
+**Invariant:** A selection that passes the SelectionLengthGuard (wordCount ≥ 5) MUST NOT show a SelectionTooShortWarning.
+
+**Anti-patterns (DO NOT USE):**
+- "character limit": the guard is word-count-based, not character-count-based
+- "minimum length": use SelectionLengthGuard (for the rule) or "minimum word count" (for documentation)
+- "short selection check": use SelectionLengthGuard
+
+---
+
+#### SelectionTooShortWarning · SelectionAnalysis
+
+**Definition:** The inline UI message rendered in the popup when the user clicks "Analyze selection" and the SelectionLengthGuard fails. It informs the user that the selected text is too short to analyze. It is rendered inline in the popup (not a toast or modal). It is cleared when the selection changes to a valid selection.
+
+**Canonical identifier in code:** `selectionTooShort` (boolean state field in Popup), rendered as an inline `<p>` or `<span>` with a descriptive message
+
+**Invariant:** When SelectionTooShortWarning is visible, the analysis request MUST NOT be submitted.
+
+**Anti-patterns (DO NOT USE):**
+- "error": this is a validation warning, not a system error; use SelectionTooShortWarning
+- "alert": use SelectionTooShortWarning
+- "validation error": use SelectionTooShortWarning
+
+---
+
+#### SelectionPreview · SelectionAnalysis
+
+**Definition:** The truncated display of the selected text shown in the popup beneath the "Analyze selection" CTA. Displays the first 80 characters of `SelectionContext.text`, followed by an ellipsis (`…`) if the text exceeds 80 characters. If the text is 80 characters or fewer, no ellipsis is appended. The 80-character limit is a display-only truncation — the full selected text is always submitted in the analysis request.
+
+**Canonical identifier in code:** `selectionPreview(text: string): string` (pure function in popup helper module), rendered as a `<p>` beneath the CTA
+
+**Invariant:** The SelectionPreview MUST NOT be shown when no SelectionContext is present.
+
+**Anti-patterns (DO NOT USE):**
+- "preview text": use SelectionPreview
+- "selection snippet": use SelectionPreview
+- "truncated selection": use SelectionPreview
+
+---
+
+#### SelectionCharacterMap · SelectionAnalysis
+
+**Definition:** A `CharacterMapEntry[]` built from the selected DOM Range, not the full page text extraction. Offset 0 in the SelectionCharacterMap corresponds to the first character of the selected text. Used as the argument to `applyHighlights()` when the analysis was run on a selection. The SelectionCharacterMap is built at analysis time (when `RUN_ANALYSIS` is processed in the content script) by calling `extractSelection()`.
+
+**Canonical identifier in code:** `CharacterMapEntry[]` (same type as the full-page map), produced by `extractSelection(): ExtractedSelection` in `extractor.ts`
+
+**Related terms:**
+- `CharacterMapEntry`: existing type — `{ textOffset: number, node: Text, nodeOffset: number }`
+- `extractText()`: the full-page equivalent
+
+**Anti-patterns (DO NOT USE):**
+- "selection map": use SelectionCharacterMap
+- "offset map": use SelectionCharacterMap
+- "highlight map": use SelectionCharacterMap
+
+---
+
+#### ExtractedSelection · SelectionAnalysis
+
+**Definition:** The return value of `extractSelection()` — the parallel to `ExtractedText` for the selected DOM range. Contains the selected text string and the SelectionCharacterMap anchored to the selected DOM range.
+
+**Canonical identifier in code:** `ExtractedSelection` (interface in `extractor.ts`), fields: `{ text: string, characterMap: CharacterMapEntry[] }`
+
+**Anti-patterns (DO NOT USE):**
+- "selection result": use ExtractedSelection
+- "extracted text" (for a selection): use ExtractedSelection; `ExtractedText` refers specifically to the full-page extraction result
+
+---
+
+#### HighlightColor · SelectionAnalysis
+
+**Definition:** The user-configured persistent background color applied to all inline highlight spans, for both selection-based and whole-page analyses. Stored in `chrome.storage.sync` under the key `highlightColor` as a CSS color string (hex, rgb, or named color). Defaults to `'#FFFF00'` (yellow) when not set. The HighlightColor is layered with the RiskLevel border: the highlight span's `backgroundColor` is the HighlightColor; the `outline` is the risk-level color (DEC-021, PM-confirmed layering rule).
+
+**Canonical identifier in code:** `highlightColor` (field in `UserSettings`, `chrome.storage.sync` key), default `'#FFFF00'`
+
+**Invariant:** The HighlightColor MUST be applied to every inline highlight span, regardless of whether the analysis was run on a selection or the full page.
+
+**Anti-patterns (DO NOT USE):**
+- "user color": use HighlightColor
+- "custom color": use HighlightColor
+- "highlight background": use HighlightColor (the background aspect is the canonical meaning; the border aspect is the risk-level color)
+
+---
+
+#### PerSelectionModelOverride · SelectionAnalysis
+
+**Definition:** An ephemeral model selection that the user can change in the popup for a single "Analyze selection" submission. The PerSelectionModelOverride is held in React state only — it is never written to `chrome.storage.sync`. When the popup closes and reopens, it reverts to the global `UserSettings.selectedModel`. The override is applied only to the `model` field in the analysis request when the user clicks "Analyze selection." It does not affect global settings.
+
+**Canonical identifier in code:** `perSelectionModel: AIModel | null` (React state field in Popup), `null` means use `settings.selectedModel`
+
+**Invariant:** Writing `perSelectionModel` to `chrome.storage.sync` is forbidden. The PerSelectionModelOverride MUST NOT persist across popup open/close cycles.
+
+**Anti-patterns (DO NOT USE):**
+- "temporary model": use PerSelectionModelOverride
+- "session model": use PerSelectionModelOverride
+- "one-off model": use PerSelectionModelOverride
+
+---
+
+#### SelectionAnalysisMode · SelectionAnalysis
+
+**Definition:** The flag that records whether the currently active analysis (or the most recently completed analysis) was run on a selection or on the full page. Used by the content script's `SHOW_ANNOTATIONS` handler to determine which character map to use for inline highlight anchoring: SelectionCharacterMap when `selectionAnalysisMode === 'selection'`, full-page characterMap when `selectionAnalysisMode === 'whole-page'`. Stored in `chrome.storage.session` alongside the annotations so the content script can reconstruct the correct anchoring context after a service worker restart.
+
+**Canonical identifier in code:** `selectionAnalysisMode: 'selection' | 'whole-page'` (field in the `SHOW_ANNOTATIONS` message payload and in `chrome.storage.session`)
+
+**Anti-patterns (DO NOT USE):**
+- "analysis type": use SelectionAnalysisMode
+- "mode": too generic — use SelectionAnalysisMode
+- "highlight mode": ambiguous with `displayMode` (sidebar vs. inline); use SelectionAnalysisMode
+
+---
+
 ## Contested Terms
 
-*(None at initial scaffolding — add entries here when agents encounter ambiguity)*
+*(None)*
 
 ---
 
 ## Retired Terms
 
-*(None at initial scaffolding)*
+### userToken · ExtensionAuth (retired by ISS-003)
+
+**Formerly:** The manually-stored Clerk JWT in `chrome.storage.sync['userToken']`. Read by `handler.ts` to authenticate analysis requests.
+
+**Retired because:** This feature (ISS-003) removes all reads of `chrome.storage.sync['userToken']`. The JWT is now obtained from the live Clerk SDK instance via `getToken()`. Do not use this key in any new code.

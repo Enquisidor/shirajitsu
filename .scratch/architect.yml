@@ -1,0 +1,33 @@
+agent: architect
+session_id: ext-auth-2026-05-11
+last_updated: "2026-05-14T12:00:00Z"
+status: complete
+
+current_task: "Phase 2 complete — spec artifacts produced, awaiting Gate 2 tech lead approval"
+
+tasks:
+  phase2-spec-ext-auth:
+    description: "Produce spec artifacts for Extension Auth (Clerk OAuth) feature: glossary update, implementation issues ISS-001 through ISS-003, DEC-013, CLAUDE.md, and approval summary"
+    status: complete
+    started_at: "2026-05-14T10:00:00Z"
+    completed_at: "2026-05-14T12:00:00Z"
+    output: ".handoffs/architect-approval-summary.md"
+    notes: |
+      All Phase 2 artifacts produced:
+      - .spec/glossary.md updated with 7 ExtensionAuth terms + userToken as Retired Term
+      - .spec/bounded-contexts/extension-auth.md: DEC-011 reference corrected to DEC-013
+      - .spec/issues/ISS-001-clerk-provider-popup-entrypoint.md (S, no deps)
+      - .spec/issues/ISS-002-popup-auth-conditional-rendering.md (M, depends ISS-001)
+      - .spec/issues/ISS-003-handler-clerk-jwt-plumbing.md (M, depends ISS-001)
+      - .logs/decisions.md: DEC-013 logged (background Clerk instance for JWT acquisition)
+      - CLAUDE.md: Architecture Conventions and Directory Structure filled in
+      - .handoffs/architect-approval-summary.md: Gate 2 artifact
+
+      Note: The bounded context file referenced the background token acquisition decision as
+      "DEC-011" but DEC-011 was already taken by a different session (selection-analysis-2026-05-15,
+      PO Agent). The decision is formally logged as DEC-013.
+
+      No new API endpoints required. No backend issues. All 3 issues are frontend-only.
+      ISS-002 and ISS-003 can run in parallel after ISS-001 completes.
+
+blockers: []

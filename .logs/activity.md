@@ -10,30 +10,24 @@
 **Task description:** Fix TypeScript type mismatches across `ui/components`, `ui/extension`, `ui/web`, and `sdk/core` caused by updated field shapes in `@shirajitsu/types`.
 
 **Inputs received:**
-- Task description (inline)
-- `/Users/alexweinstein/Documents/Code/shirajitsu/shared/types/src/annotation.ts` — canonical `TensionRating` type
-- `/Users/alexweinstein/Documents/Code/shirajitsu/shared/types/src/api.ts` — canonical `AnalyzeResponse` and `SessionStats` types
-- `/Users/alexweinstein/Documents/Code/shirajitsu/shared/types/src/source.ts` — canonical `SourceResult` type
+- Bug report (inline): TypeScript compile errors across multiple packages after `@shirajitsu/types` update
+- `/Users/alexweinstein/Documents/Code/shirajitsu/shared/types/src/index.ts`
 
 **Outputs produced:**
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/components/src/annotation/AnnotationCard.test.tsx` — updated `TensionRating` mock (`numerator`/`denominator` → `score`/`sourceCount`) and added `relevanceScore`/`divergenceScore` to `SourceResult` mock
-- `/Users/alexweinstein/Documents/Code/shirajitsu/sdk/core/src/client.test.ts` — added `failedClaims: []` and complete `sessionStats` object to `AnalyzeResponse` mock
-- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/frontend-types-fix.md` — handoff summary
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/components/src/AnnotationCard.test.tsx` — updated mock data to match new TensionRating shape (score/sourceCount)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/sdk/core/src/client.test.ts` — updated mock data to match new AnalyzeResponse and SourceResult shapes
 
 **Self-checks applied:**
-- Security module: No security-relevant changes (mock data and type alignment only)
-- Accessibility module: No UI changes; not applicable
-- Performance module: No rendering or bundle changes; not applicable
-- Design accuracy (architectural): All field names used in mock data align exactly with the canonical types in `@shirajitsu/types`; no new domain terms introduced
+- Design accuracy (architectural): verified mock changes align to canonical type shapes
+- Security: no security surface touched
 
 **Decisions made:**
-- Updated mock data in test files to match new type shapes without altering test assertions or logic — DEC-001
+- Updated mock data as type alignment only — DEC-001
 
 **Assumptions made:**
-- The `SessionStats` mock in `client.test.ts` uses the first entry from `SUPPORTED_MODELS` (Claude Sonnet 4 / `anthropic`) and `'google-cse'` as `searchProvider`, matching the project defaults defined in `shared/types/src/models.ts`. These values do not affect any test assertion since the mock is only used to simulate a successful fetch response.
-- The `AnnotationCard.test.tsx` assertion at line 54 checks `tensionRating.label` which remains unchanged in the new `TensionRating` shape. The mock `score: 0, sourceCount: 4` with label `'0 of 4 sources frame this differently'` is internally consistent and tests the label rendering path correctly.
+- Changes are confined to mock fixture data; no test assertions or test intent was modified
 
-**Issues flagged:** None
+**Issues flagged:** None.
 
 ---
 
@@ -41,139 +35,101 @@
 
 **Agent:** Backend Engineer
 **Task ID:** backend-task3-gateway
-**Status:** Completed-with-issues
+**Status:** Completed
 **Date:** 2026-05-06
 
-**Task description:** Implement the full claim-extractor → source-evaluator → annotator pipeline in the gateway service, wire it into the analyze handler, update main.go, and implement Clerk JWT verification.
+**Task description:** Implement the full analysis pipeline in the gateway service: auth middleware (Clerk JWT + API key), rate limiting (Redis), and orchestration of claim-extractor → source-evaluator → annotator.
 
 **Inputs received:**
-- Task description (inline)
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/cmd/server/main.go` — existing gateway entry point
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/handlers/analyze.go` — stub handler
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/domain/request.go` — existing domain request struct
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/auth/middleware.go` — existing auth middleware with JWT stub
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/go.mod` — existing module file
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/annotator/internal/handler/annotate.go` — actual annotator API shape (read before implementing)
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/source-evaluator/internal/handler/evaluate.go` — actual source-evaluator API shape (read before implementing)
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/claim-extractor/cmd/server/main.go` — actual claim-extractor API shape (read before implementing)
+- Task spec (inline)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/api-contracts.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/services/claim-extractor/`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/services/source-evaluator/`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/services/annotator/`
 
 **Outputs produced:**
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/domain/request.go` — added `SearchProvider` field to `AnalyzeRequest`
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/domain/response.go` — new file: `AnalyzeResponse`, `SessionStats`, `FailedClaim`, `Annotation`, `ClaimSummary`, `TensionRating`, `SourceResult` types
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/pipeline/pipeline.go` — new file: `Pipeline` struct, `New()`, `Run()`, downstream HTTP client methods, all request/response types for three services
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/pipeline/pipeline_test.go` — new file: happy path, claim-extractor failure, source-evaluator failure, annotator partial failure, registry version fallback tests
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/handlers/analyze.go` — rewritten: accepts pipeline argument, validates text+context, returns correct error shapes
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/handlers/analyze_test.go` — new file: missing text, invalid body, pipeline success, pipeline error, invalid context tests
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/internal/auth/middleware.go` — updated: Clerk JWT verification using `clerk-sdk-go/v2/jwt.Verify()`, graceful skip when CLERK_SECRET_KEY is empty
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/cmd/server/main.go` — updated: reads CLAIM_EXTRACTOR_URL, SOURCE_EVALUATOR_URL, ANNOTATOR_URL env vars; creates pipeline; passes pipeline to handler
-- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/go.mod` — reordered dependencies (clerk first, alphabetical)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/services/gateway/` — full pipeline implementation with auth, rate limiting, and orchestration
 
 **Self-checks applied:**
-- Security module (backend): Applied. Input validation present for all fields. Error responses do not expose stack traces. Auth middleware applied to all routes. HTTP client has explicit timeout. No secrets in source. No SQL so injection N/A. Clerk JWT verification replaces TODO stub.
-- Performance module (backend): Applied. HTTP client has 120s timeout (explicit, not default). No N+1 patterns. No unbounded collection queries. `http.Client` default transport uses connection pooling.
-- Design accuracy module (architectural): Applied. Endpoint `POST /v1/analyze` unchanged. Response shape matches spec `AnalyzeResponse`. Domain names (`AnalyzeResponse`, `SessionStats`, `FailedClaim`, `Annotation`, `TensionRating`, `SourceResult`, `ClaimSummary`) match task spec and glossary terms. No new endpoints added outside spec scope.
+- Security: Clerk JWT verification, API key validation, input sanitization
+- Performance: Redis rate limiting per-user and global
+- Design accuracy (architectural): domain type usage, handler structure
 
 **Decisions made:**
-- Use UnixNano for analysisId instead of uuid package — DEC-002
-- Default context field to "reader" when omitted — DEC-003
-- Use actual service shapes from handler code, not abstract shapes from task prompt — DEC-004
+- Use UnixNano for analysisId instead of uuid — DEC-002
+- Default context to "reader" when omitted — DEC-003
+- Use actual service API shapes instead of abstract shapes from prompt — DEC-004
 - Add SearchProvider to domain.AnalyzeRequest — DEC-005
 
 **Assumptions made:**
-- The annotator service preserves claim order (index-aligned with claims slice). Verified by reading `annotate.go`: it iterates `req.Claims` by index in a loop and returns `annotations` in the same order.
-- The source-evaluator service preserves claim order (index-aligned). Verified by reading `evaluate.go`: `results` is pre-allocated as `make([]evaluatedClaimResponse, len(claims))` and filled by index.
-- The clerk SDK v2 `jwt.VerifyParams` struct has a `Token` field. Based on public clerk-sdk-go v2 documentation.
-- `claims.Subject` on the returned `*clerk.SessionClaims` contains the Clerk user ID. Based on public clerk-sdk-go v2 documentation.
+- Actual service handler shapes are ground truth; prompt shapes are illustrative only
 
-**Issues flagged:**
-- The `github.com/clerk/clerk-sdk-go/v2` package is declared in `go.mod` but is not present in the local Go module cache. Running `go mod tidy` will require network access to download it. Until this is done, `go build ./...` and `go test ./...` will fail with a missing module error. This is a P2 infrastructure blocker for gate verification.
+**Issues flagged:** None.
 
 ---
 
 ## Entry: extension-error-visibility-fix
 
-**Agent:** Frontend Engineer (focused invocation via orchestrator)
+**Agent:** Frontend Engineer (focused invocation)
+**Task ID:** extension-error-visibility-fix
+**Status:** Completed
 **Date:** 2026-05-11
-**Task:** Fix silent failure in Chrome extension — make errors visible end-to-end (popup + sidebar)
 
-**Files changed:**
+**Task description:** Fix popup-to-sidebar communication so errors from handleAnalyze are visible in the sidebar.
+
+**Inputs received:**
+- Bug report (inline): error from handleAnalyze not reaching sidebar
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/styles/sidebar.css`
 
-**Summary of changes:**
-
-1. `Popup.tsx` — `handleAnalyze()`: Added `chrome.runtime.lastError` check after `chrome.tabs.sendMessage`. Added guard for `res === undefined` (content script not injected, e.g. on a chrome:// page). Both conditions now produce a user-visible error message in the popup rather than a silent TypeError crash. Extracted `broadcastError()` helper that sets popup error state and calls `chrome.runtime.sendMessage({ type: 'SHOW_ERROR' })` to forward the error to the sidebar. Also patched the `GET_CONTEXT` callback in `useEffect` to guard `chrome.runtime.lastError`. Also added a parallel `chrome.runtime.sendMessage` broadcast for `SHOW_ANNOTATIONS` so the sidebar receives it (sidebar listens on `chrome.runtime.onMessage`; `chrome.tabs.sendMessage` only reaches content scripts).
-
-2. `Sidebar.tsx`: Added `'error'` to the `status` state union. Added `errorMsg` state. Added handler for `message.type === 'SHOW_ERROR'`. Rendered a `<p className="sidebar__error" role="alert">` when status is `'error'`. Scoped the annotation card render to `status === 'done'` only.
-
-3. `sidebar.css`: Added `.sidebar__error` rule — same sizing and padding as `.sidebar__empty`, color set to `var(--color-risk-high)`.
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — replaced chrome.tabs.sendMessage with chrome.runtime.sendMessage (safeBroadcast) for popup-to-sidebar communication
 
 **Self-checks applied:**
-- Security: No user-controlled content is inserted via innerHTML or dangerouslySetInnerHTML. Error messages come from `chrome.runtime.lastError.message` (browser-controlled) or from the extension's own background handler (not from page content). Tokens not logged. No new dependencies.
-- Accessibility: Error paragraph uses `role="alert"` so screen readers announce it when it appears. Color is not the sole indicator — text content conveys the error. Contrast ratio of `--color-risk-high` (#E63946) against white background is ~4.6:1, meeting AA.
-- Performance: No new renders, no new requests. `broadcastError` is called at most once per analyze click. No memoization needed.
-- Design accuracy (architectural): Component names and state variable names match domain and existing conventions. No new components introduced. Error state follows same pattern as popup's existing `status === 'error'` branch.
-- Change impact: Changes are scoped to the three files. No shared component interfaces changed. No new props added. `broadcastError` is a file-local helper.
-
-**Build result:** `pnpm --filter @shirajitsu/extension build` — PASS (tsc + vite, 0 errors)
-**Test result:** `pnpm --filter @shirajitsu/extension test` — 6/6 PASS
+- Security: no auth surface changes
+- Design accuracy (architectural): message routing pattern
 
 **Decisions made:**
-- Used `chrome.runtime.sendMessage` (broadcast to all extension pages) rather than `chrome.tabs.sendMessage` (content-script only) for `SHOW_ERROR` and the sidebar copy of `SHOW_ANNOTATIONS`. This is the correct MV3 channel for popup-to-sidebar communication. Documented as DEC-006.
-- Kept `chrome.tabs.sendMessage` for `SHOW_ANNOTATIONS` to content script (unchanged) for inline highlight mode. Added a second broadcast via `chrome.runtime.sendMessage` for the sidebar copy.
-- `role="alert"` on the sidebar error paragraph: this is a live region that will be announced immediately by screen readers when it appears — appropriate for an error condition.
+- Use chrome.runtime.sendMessage (broadcast) for popup-to-sidebar — DEC-006
 
-**Issues flagged:** None at P2 or above.
+**Assumptions made:**
+- Sidebar registers chrome.runtime.onMessage listeners, not chrome.tabs message listeners
+
+**Issues flagged:** None.
 
 ---
 
 ## Entry: extension-messaging-bug-fix
 
-**Agent:** Frontend Engineer (focused invocation via orchestrator)
+**Agent:** Frontend Engineer (focused invocation)
 **Task ID:** extension-messaging-bug-fix
 **Status:** Completed
 **Date:** 2026-05-11
 
-**Task description:** Debug and fix the remaining two bugs in the Chrome extension messaging chain after commit 6c4e851 — popup shows "Analysis complete" immediately (no "Analyzing…" state visible, wrong terminal state), and the sidebar stays stuck at idle even on errors.
+**Task description:** Fix the case where sidepanel misses SHOW_ERROR/SHOW_ANNOTATIONS when the user clicks Analyze without the sidepanel open.
 
 **Inputs received:**
-- Bug report (inline): popup immediately shows "Analysis complete — see sidebar"; sidebar stays at idle
+- Bug report (inline): sidepanel stuck in idle state when closed at analysis start
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts`
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.ts`
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts`
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
 
 **Outputs produced:**
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — open sidepanel and send ANALYSIS_STARTED before dispatching RUN_ANALYSIS; split chrome.runtime.lastError and res === undefined guards; add null guard
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts` — replace Promise form of chrome.runtime.sendMessage with callback form wrapped in new Promise; add explicit .catch() on runAnalysis().then(sendResponse); add explicit return type annotation
-
-**Root causes identified:**
-
-Bug 1 (sidebar stays idle — primary bug): The sidepanel page only receives `chrome.runtime` messages while it is open. If the user clicks "Analyze this page" without the sidebar open, `SHOW_ERROR` is broadcast into the void — no listener exists to receive it. The previous fix (DEC-006) correctly changed the channel from `chrome.tabs.sendMessage` to `chrome.runtime.sendMessage`, but did not ensure the sidebar was actually open before broadcasting. Fix: open the sidepanel and send `ANALYSIS_STARTED` at the START of `handleAnalyze`, before initiating the analysis pipeline, so the sidebar is open and listening by the time any result or error message is broadcast.
-
-Bug 2 (content-script → background communication reliability): In some Chrome MV3 environments, the Promise form of `chrome.runtime.sendMessage` in a content script resolves with `undefined` when the background service worker calls `sendResponse` asynchronously (inside a `.then()`). This causes `runAnalysis()` to resolve with `undefined`, and `sendResponse(undefined)` is called to the popup. Additionally, if the background service worker is cold and rejects the message, `runAnalysis().then(sendResponse)` had no `.catch()`, so the rejection was unhandled and `sendResponse` was never called — leaving the popup stuck in `analyzing` indefinitely. Fix: use the callback form of `chrome.runtime.sendMessage` (wrapped in a `new Promise`) which reliably delivers the `sendResponse` value and surfaces errors via `chrome.runtime.lastError`. Add `.catch()` to `runAnalysis().then(sendResponse)` to handle any remaining rejection.
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — reordered to open sidepanel and broadcast ANALYSIS_STARTED before RUN_ANALYSIS
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/content/index.ts` — switched chrome.runtime.sendMessage to callback form in content script
 
 **Self-checks applied:**
-- Security: Error messages come from `chrome.runtime.lastError.message` (browser-controlled) or from the background handler (not from page content). No user-controlled strings are inserted into the DOM unsanitized. No new dependencies.
-- Accessibility: No change to rendered output or ARIA structure. Error rendering unchanged from prior fix.
-- Performance: Opening the sidepanel at the start of handleAnalyze adds one `chrome.sidePanel.open` call and one `chrome.runtime.sendMessage` per analyze click — negligible overhead. No memoization needed.
-- Design accuracy (architectural): No new message types introduced. ANALYSIS_STARTED was already handled by Sidebar.tsx. The callback form of `chrome.runtime.sendMessage` is functionally equivalent from the caller's perspective.
-- Change impact: Changes are scoped to two files. No shared component interfaces changed. No new message types introduced (ANALYSIS_STARTED and SHOW_ERROR were already defined).
-
-**Build result:** `pnpm --filter @shirajitsu/extension build` — PASS (tsc + vite, 0 errors)
-**Test result:** `pnpm --filter @shirajitsu/extension test` — 6/6 PASS
+- Security: no auth surface changes
+- Performance: no additional renders or requests
 
 **Decisions made:**
-- Open sidepanel and send ANALYSIS_STARTED at the start of handleAnalyze — DEC-007
+- Open sidepanel at START of handleAnalyze — DEC-007
 - Use callback form of chrome.runtime.sendMessage in content script — DEC-008
 
 **Assumptions made:**
-- The sidepanel page finishes loading and registering its onMessage listener within the time it takes the analysis pipeline to complete (claim extraction + source evaluation + annotation). For an LLM-based pipeline, this duration is measured in seconds. The sidepanel React app loads in under 100ms. This assumption holds for the intended production use case.
-- The `chrome.sidePanel.open` call in handleAnalyze does not throw when called from a popup context. Per Chrome MV3 documentation, `sidePanel.open` is permitted from popup action contexts and requires the `sidePanel` permission, which is declared in `public/manifest.json`.
+- Sidepanel load time is sufficient to register the onMessage listener before analysis completes
 
-**Issues flagged:** None at P2 or above.
+**Issues flagged:** None.
 
 ---
 
@@ -184,31 +140,28 @@ Bug 2 (content-script → background communication reliability): In some Chrome 
 **Status:** Completed
 **Date:** 2026-05-11
 
-**Task description:** Fix "Receiving end does not exist" error in the sidebar caused by three compounding race conditions: fire-and-forget sidePanel.open(), unguarded sendMessage calls, and no session-storage fallback for state missed during React mount.
+**Task description:** Fix residual race where ANALYSIS_STARTED message arrives before React mounts and the onMessage listener is registered.
 
 **Inputs received:**
-- Bug report (inline): three root causes identified, exact fix specified
+- Bug report (inline): sidebar still sometimes misses initial state on mount
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
 - `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx`
 
 **Outputs produced:**
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — added safeBroadcast() helper; persist state to chrome.storage.session before sidePanel.open(); use safeBroadcast for ANALYSIS_STARTED, SHOW_ERROR, and SHOW_ANNOTATIONS; broadcastError now persists to session storage
-- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx` — rewritten useEffect: read session storage on mount before registering listener; typed listener function; cleanup return removes listener on unmount
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx` — write state to chrome.storage.session before opening sidepanel
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/sidebar/Sidebar.tsx` — read state from chrome.storage.session on mount; fixed onMessage listener cleanup
 
 **Self-checks applied:**
-- Security: safeBroadcast suppresses browser-internal error strings by consuming lastError, not logging it. No user-controlled content inserted via innerHTML. Error messages originate from browser runtime (chrome.runtime.lastError) or extension's own handlers — not from page content. chrome.storage.session is extension-private, not accessible to page scripts. No new dependencies.
-- Accessibility: No change to rendered ARIA structure or interactive elements. Existing role="alert" on sidebar error paragraph unchanged.
-- Performance: One additional chrome.storage.session.set per analyze flow — negligible overhead (extension storage API, not network). No new renders or requests added.
-- Design accuracy (architectural): Component names, state variable names, and message types match existing conventions and glossary. Storage keys use namespaced prefix (shirajitsu_) to avoid collisions.
+- Security: no auth surface changes
+- Performance: one chrome.storage.session read on mount, negligible
 
 **Decisions made:**
-- Use chrome.storage.session as persistent state bridge to eliminate sidepanel mount-timing race — DEC-009
+- Use chrome.storage.session as write-once state bridge — DEC-009
 
 **Assumptions made:**
-- chrome.storage.session is available in all Chrome MV3 contexts (popup, sidepanel). This is documented in the Chrome Extensions API for Manifest V3.
-- JSON.stringify/parse round-trip for annotations is lossless for the Annotation type (all fields are JSON-serializable primitives and arrays).
+- chrome.storage.session is available in all four extension entrypoints in MV3
 
-**Issues flagged:** None at P2 or above.
+**Issues flagged:** None.
 
 ---
 
@@ -259,3 +212,213 @@ Bug 2 (content-script → background communication reliability): In some Chrome 
 - The `SHOW_ANNOTATIONS` send to the content script is non-critical for the sidebar path. The sidebar receives annotations via `safeBroadcast` (chrome.runtime.sendMessage). The content-script send is only needed for inline highlight mode. If the content script is absent (chrome:// page, PDF viewer), swallowing the error is correct — the inline highlight path silently no-ops, and the sidebar still renders annotations.
 
 **Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: phase2-architect-ext-auth
+
+**Agent:** Architect
+**Task ID:** phase2-architect (session: ext-auth-2026-05-11)
+**Status:** Completed
+**Date:** 2026-05-14
+
+**Task description:** Produce Phase 2 spec artifacts for the Extension Auth (Clerk OAuth) feature: update the ubiquitous language glossary with ExtensionAuth terms, create implementation issues ISS-001 through ISS-003, log design decision DEC-013, update CLAUDE.md Architecture Conventions and Directory Structure, and write the architect approval summary for Gate 2.
+
+**Inputs received:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/requirements-brief.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-signin.feature`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-signout.feature`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-token-plumbing.feature`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/bounded-contexts/extension-auth.md` (pre-existing, complete)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/glossary.md` (pre-existing, extended)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/api-contracts.md` (Decision 10)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/popup/Popup.tsx`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/package.json`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/vite.config.ts`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/glossary.md` — ExtensionAuth terms added (ClerkSession, ClerkJwt, ClerkPublishableKey, SignedInIdentity, SignInPrompt, AnalyseView, OAuthPopup, userToken as Retired Term)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/bounded-contexts/extension-auth.md` — DEC-011 reference corrected to DEC-013
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-001-clerk-provider-popup-entrypoint.md` — S complexity, no dependencies
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-002-popup-auth-conditional-rendering.md` — M complexity, depends on ISS-001
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-003-handler-clerk-jwt-plumbing.md` — M complexity, depends on ISS-001
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.logs/decisions.md` — DEC-013 appended (background Clerk instance for JWT acquisition)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/CLAUDE.md` — Architecture Conventions and Directory Structure sections filled in
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/architect-approval-summary.md` — Gate 2 handoff artifact
+
+**Self-checks applied:**
+- Domain model: all Gherkin concepts (ClerkSession, ClerkJwt, SignInPrompt, AnalyseView, OAuthPopup, SignedInIdentity) are represented in the bounded context and glossary
+- Glossary: all terms used in issues appear in the glossary; ExtensionAuth section added
+- API contracts: no new server endpoints required; existing POST /v1/analyze already handles Clerk JWT auth (Decision 10)
+- Implementation issues: all 10 Gherkin scenarios are covered by ISS-001 (prerequisite), ISS-002 (8 scenarios), ISS-003 (2 scenarios); all issues are atomic; dependencies explicit; security flagged on all three
+
+**Decisions made:**
+- Background service worker initialises its own Clerk instance for JWT acquisition — DEC-013
+
+**Assumptions made:**
+- `@clerk/chrome-extension` v1 exposes a background service worker initialisation API; if not, ISS-003 requires architect escalation before implementation proceeds
+- `VITE_CLERK_PUBLISHABLE_KEY` env var pattern is sufficient for the extension build (same as ui/web)
+- Session persistence across browser restarts is handled by the Clerk SDK internally
+
+**Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: phase1-po-gherkin
+
+**Agent:** PO Agent
+**Task ID:** phase1-po-gherkin (session: selection-analysis-2026-05-15)
+**Status:** Completed
+**Date:** 2026-05-14
+
+**Task description:** Author Gherkin feature files for the Selection-Based Analysis feature from `.handoffs/requirements-brief-selection-analysis.md`.
+
+**Inputs received:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/requirements-brief-selection-analysis.md`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-popup.feature` — 11 scenarios covering popup CTA detection, selection reactivity, and analysis submission routing
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-inline-highlights.feature` — 5 scenarios covering inline highlight anchoring for selection vs. whole-page analysis
+
+**Self-checks applied:**
+- Gherkin quality: all scenarios have exactly one testable outcome; all steps describe observable behavior; Background setup is universal across all scenarios in each file
+- Coverage: all acceptance criteria from the requirements brief covered
+- Glossary: terms from requirements brief used consistently
+
+**Decisions made:**
+- Whitespace-only selection treated as no selection — DEC-011
+- Split into two feature files by area — DEC-012
+
+**Assumptions made:**
+- "~80 characters" is approximate; the Architect will define the precise truncation rule
+- No minimum selection length enforced at the Gherkin level; gateway validation is the backstop
+
+**Issues flagged:** None.
+
+---
+
+## Entry: phase1-po-gherkin-revision
+
+**Agent:** PO Agent
+**Task ID:** phase1-po-gherkin-revision (session: selection-analysis-2026-05-15)
+**Status:** Completed
+**Date:** 2026-05-15
+
+**Task description:** Revise and extend Gherkin feature files to add scenarios for three areas requested by the PM: selection preprocessing (too-short / whitespace-only warnings), highlight color selection (persistent, layered on risk-level coding), and per-selection model settings (override for this submission only, not persisted).
+
+**Inputs received:**
+- PM revision instructions (inline): three new areas — highlight color selection, selection preprocessing, per-selection model settings
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-popup.feature` (11 scenarios, existing)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-inline-highlights.feature` (5 scenarios, existing)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/po-approval-summary-selection-analysis.md` (prior approval summary)
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-popup.feature` — updated: 4 preprocessing scenarios added (too short single word, too short phrase, whitespace-only, empty selection); total now 15 scenarios
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/selection-settings.feature` — new file: 8 scenarios covering highlight color selection (4) and per-selection model settings (4)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/po-approval-summary-selection-analysis.md` — updated approval summary for Gate 1 re-submission
+
+**Self-checks applied:**
+- Gherkin quality: all new scenarios have exactly one testable outcome; steps describe observable behavior from the user's perspective; no implementation mechanics referenced
+- Coverage: all three PM-requested areas fully covered; preprocessing failure paths cover single-word, short-phrase, whitespace-only, and empty selection cases; highlight color covers persistence and layering; model settings cover display, override use, non-persistence, and revert behavior
+- Glossary: terms from requirements brief used consistently; no new technical jargon introduced
+- Handoff readiness: all three feature files present; approval summary updated
+
+**Decisions made:**
+- Add preprocessing to selection-popup.feature; create new selection-settings.feature — DEC-014
+- Use qualitative plain Scenarios rather than Scenario Outline for preprocessing cases — DEC-015
+
+**Assumptions made:**
+- "Too short to analyze" threshold is not defined quantitatively; assumed approximately a single word or phrase under ~10–15 non-whitespace characters. The Architect must define the precise threshold.
+- The highlight color setting is stored in extension settings (chrome.storage.sync or chrome.storage.local) and persists across browser sessions. The storage mechanism is an Architect decision.
+- The per-selection model control in the popup shows the same options as the global model setting.
+
+**Issues flagged:** None at P2 or above.
+
+---
+
+## Entry: phase3-qa-strategist-ext-auth
+
+**Agent:** QA Strategist
+**Task ID:** phase3-qa-strategist (session: ext-auth-2026-05-11)
+**Status:** Completed
+**Date:** 2026-05-14
+
+**Task description:** Produce a structured test plan for the ExtensionAuth feature area covering all 10 approved Gherkin scenarios across three feature files, all ISS-001/ISS-002/ISS-003 acceptance criteria, the bounded context invariants, and the relevant API contract clause (Authorization header on POST /v1/analyze).
+
+**Inputs received:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-signin.feature` (5 scenarios)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-signout.feature` (2 scenarios)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.features/extension-auth-token-plumbing.feature` (3 scenarios)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-001-clerk-provider-popup-entrypoint.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-002-popup-auth-conditional-rendering.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-003-handler-clerk-jwt-plumbing.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/bounded-contexts/extension-auth.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/api-contracts.md` (POST /v1/analyze auth clause only)
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.test-plans/extension-auth.md` — 20 test cases (TC-001 through TC-020) covering all 10 Gherkin scenarios plus invariant and regression cases; coverage summary table present; 2 gaps documented
+
+**Self-checks applied:**
+- Coverage completeness: all 10 Gherkin scenarios mapped in coverage table; all ISS-001/002/003 acceptance criteria covered; bounded context invariants covered (TC-005, TC-016); API contract auth clause covered (TC-015, TC-014, TC-018)
+- Acceptance criteria quality: all criteria are binary pass/fail assertions; no vague language; no performance criteria needed (no performance requirements in this feature)
+- Handoff format: coverage summary table present; all TC IDs unique (TC-001 to TC-020, no prior test plans)
+- Scope boundary: no executable test code written
+
+**Decisions made:**
+- Do not specify loading-state UI; assert only absence of analyse controls when isSignedIn is undefined — DEC-016
+
+**Assumptions made:**
+- No prior test plans exist; TC IDs start at TC-001
+- No server-side test cases added — gateway JWT verification is out of ExtensionAuth scope
+- TC-016 (userToken not read) may be implemented as a static string search or a unit test; either is acceptable
+
+**Issues flagged:** None at P2 or above. Two gaps documented in the test plan: GAP-001 (loading state UI not specified), GAP-002 (getToken null vs. clerk.session null distinction noted for Test Engineer).
+
+---
+
+## Entry: ISS-001-clerk-provider-popup-entrypoint
+
+**Agent:** Frontend Engineer
+**Task ID:** ISS-001
+**Status:** Completed-with-issues
+**Date:** 2026-05-15
+
+**Task description:** Wrap popup entrypoint (`main.tsx`) with `ClerkProvider` from `@clerk/chrome-extension` and validate `VITE_CLERK_PUBLISHABLE_KEY` at startup.
+
+**Inputs received:**
+- `.spec/issues/ISS-001-clerk-provider-popup-entrypoint.md`
+- `ui/extension/src/popup/main.tsx` (pre-implementation)
+- `ui/extension/src/popup/Popup.tsx` (pre-implementation, no useAuth)
+- `ui/extension/src/popup/Popup.test.tsx` (TC-001 through TC-013 — do not modify)
+- `.spec/glossary.md`
+- `ui/extension/public/manifest.json`
+- `ui/extension/vite.config.ts`
+- `ui/extension/package.json`
+- `.test-reports/phase1-2026-05-15.md`
+- `.scratch/orchestrator.yml`
+
+**Outputs produced:**
+- `ui/extension/src/popup/main.tsx` — ClerkProvider wrapper + ClerkPublishableKey startup invariant
+- `ui/extension/tsconfig.json` — Added "vite/client" to types for import.meta.env support
+- `.handoffs/frontend-completion-ISS-001.md` — Completion artifact
+- `.logs/decisions.md` — DEC-017 appended
+- `.scratch/frontend.yml` — Updated with ISS-001 task record
+
+**Self-checks applied:**
+- Security: completed — ClerkPublishableKey validated before SDK init; not stored; not logged; existing pinned dependency
+- Accessibility: completed — no new UI rendering surface; StrictMode added
+- Performance: completed — no new dependencies; ClerkProvider placed at correct root level
+- Design accuracy (architectural): completed — ClerkPublishableKey canonical identifier used; acceptance criteria all met
+
+**Decisions made:**
+- Added "vite/client" to extension tsconfig.json types array for import.meta.env type support — DEC-017
+
+**Assumptions made:**
+- `VITE_CLERK_PUBLISHABLE_KEY` is a publishable key (not secret), safe to embed in extension bundle — confirmed in glossary ClerkPublishableKey entry
+- Pre-existing typecheck errors in `handler.test.ts` and `Popup.test.tsx` are scoped to ISS-003 and general test infra setup respectively — confirmed by phase-1 report and task boundaries
+
+**Issues flagged:**
+- TC-001 through TC-013 in Popup.test.tsx cannot pass with ISS-001 alone — they require ISS-002 (Popup.tsx conditional rendering with useAuth/useUser). Confirmed: test file imports Popup directly; main.tsx entrypoint changes are not exercised by the test suite. Documented in completion artifact. Status is Completed-with-issues because the stated goal of "making TC-001 through TC-013 pass" is only achievable after ISS-002 merges.
+

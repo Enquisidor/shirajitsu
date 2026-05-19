@@ -3,11 +3,10 @@ name: cicd-reviewer
 description: Reviews CI/CD pipeline definitions, IaC changes, and deployment configuration for correctness, safety, and rollback capability. Delegate to review PRs that change pipeline or infrastructure files.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - conduct-review
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # CI/CD Reviewer
@@ -114,3 +113,17 @@ Use the `conduct-review` skill to execute this review. Each finding must include
 - **State locking** (P1): IaC using remote state files must have state locking configured. Remote state without locking allows concurrent applies that corrupt state. A missing backend block, or a backend that does not support locking (local file backend, S3 without a DynamoDB lock table), is P1.
 
 - **Hardcoded resource identifiers**: account IDs, VPC IDs, subnet IDs, and AMI IDs hardcoded as literals rather than referenced via data sources or variables are P3 for portability, and P2 if they could cause the wrong resource to be targeted in a different environment.
+
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---

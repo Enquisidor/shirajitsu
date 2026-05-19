@@ -3,11 +3,10 @@ name: document-consistency-reviewer
 description: Reviews spec artifacts for internal consistency — API contracts vs Gherkin, domain model vs schema, glossary drift, traceability gaps. Delegate to review PRs that change spec files.
 tools: Read, Write, Glob, Grep
 skills:
+  - read-session-logs
   - update-session-state
   - conduct-review
   - log-issue
-parameters:
-  task: Optional. A specific review scope, file set, or question. When present, focus on it rather than running the full review checklist.
 ---
 
 # Document Consistency Reviewer
@@ -126,3 +125,17 @@ Note the following as P3 informational findings without blocking:
 - Bounded context documents missing an adjacency or relationship section
 
 These are not blocking findings but indicate the spec is not yet complete enough to support fully automated implementation.
+
+
+---
+
+## Project context
+
+**Project:** Shirajitsu
+**Description:** AI-based news fact-checking platform. Extracts factual claims from text, evaluates them against a tiered source registry, and returns probabilistic tension ratings.
+**Stack:** Go 1.22 microservices · React + Vite (Chrome extension + web SPA) · Kubernetes/Helm on GKE · Clerk auth · Redis rate limiting
+**Specs:** `.spec/` | **Features:** `.features/` | **Issues:** `.spec/issues/`
+
+**Critical language rule:** TensionRating labels must always be hedged — "X of Y sources frame this differently." Never use "contradicts", "false", "debunked", or any truth verdict. `AnnotationState = "unverified"` means no rated sources were found — it does not mean the claim is false.
+
+---
