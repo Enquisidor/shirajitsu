@@ -455,3 +455,43 @@ The existing `RISK_COLORS` map in `inline-highlighter.ts` is repurposed from sem
 **Decision made:** Option 1 for the MVP. Show all `SUPPORTED_MODELS`. If the user submits with an unconfigured model, the gateway's existing `provider_key_missing` error path handles it gracefully. This limitation is documented in ISS-008 and in the SelectionAnalysis bounded context.
 
 **PM/Tech Lead review required:** No — the PM was consulted and confirmed that "show only configured models" cannot be enforced client-side in the current architecture. The gateway error path is the safety net.
+
+---
+
+## DEC-023
+
+**Date:** 2026-05-19
+**Agent:** Frontend Engineer
+**Task:** ISS-003
+
+**Decision:** Use the explicit callback form of `chrome.storage.sync.get` wrapped in a `Promise` constructor in `handler.ts`, rather than the native Promise form (`await chrome.storage.sync.get([...])` with no callback).
+
+**Context:** The `handler.test.ts` test mocks `chrome.storage.sync.get` with a callback-based implementation: `(_keys, cb) => cb({gatewayUrl: '...'})`. This mock does not return a Promise — it calls the callback synchronously. If `handler.ts` uses the native Promise form (`await chrome.storage.sync.get(['gatewayUrl'])`), `chrome.storage.sync.get` is called without a callback argument, `cb` inside the mock is `undefined`, and calling `cb({...})` throws a TypeError. The explicit callback form `chrome.storage.sync.get(['gatewayUrl'], (items) => resolve(items))` works correctly with this mock: `cb = (items) => resolve(items)`, so `cb({gatewayUrl: '...'})` resolves the outer Promise as expected.
+
+**Options considered:**
+1. Use native Promise form: `const settings = await chrome.storage.sync.get(['gatewayUrl'])` — cleaner code, but incompatible with the test mock which calls the second argument as a callback. Would cause TypeErrors in tests.
+2. Use callback form wrapped in `new Promise`: `const settings = await new Promise((resolve) => chrome.storage.sync.get(['gatewayUrl'], (items) => resolve(items)))` — compatible with both the test mock and the real Chrome API (which invokes the callback). Consistent with the existing pattern in `content/index.ts`.
+
+**Decision made:** Option 2. The callback form is already the established pattern in `content/index.ts` (DEC-008). It works correctly in production (Chrome MV3 calls the callback) and in tests (mock calls the callback). No change to the test mock is required.
+
+**PM/Tech Lead review required:** No
+
+---
+
+## DEC-024
+
+**Date:** 2026-05-19
+**Agent:** Frontend Engineer
+**Task:** ISS-003
+
+**Decision:** Create `.env.test` in `ui/extension/` with a placeholder `VITE_CLERK_PUBLISHABLE_KEY` value to satisfy the `index.test.ts` TC-017-a assertion that `publishableKey` matches `/^pk_/`.
+
+**Context:** `index.test.ts` TC-017-a checks that `__unstable__createClerkClient` is called with `{ publishableKey: expect.stringMatching(/^pk_/) }`. In `handler.ts`, the publishable key is read from `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY`. In Vitest tests, `import.meta.env.VITE_*` values are loaded from `.env.*` files relative to the Vite project root (`ui/extension/`). No `.env.test` existed, so the key resolved to `undefined`, failing the regex assertion. A test placeholder value starting with `pk_test_` satisfies the assertion without exposing any real credentials.
+
+**Options considered:**
+1. Use `define` in `vite.config.ts` test section to inject a test value for `VITE_CLERK_PUBLISHABLE_KEY` — couples the env var to the build config, requires `test.define` which overrides all environments.
+2. Create `.env.test` with a placeholder value — standard Vite/Vitest pattern for test environment variables; the file is committed as a testing artifact, contains no real credentials, and is loaded only in the `test` environment (`NODE_ENV=test`).
+
+**Decision made:** Option 2. Creating `.env.test` is the standard Vite idiom for per-environment variable values. The placeholder `pk_test_placeholder_for_testing_only` clearly communicates its purpose and does not represent a real Clerk publishable key.
+
+**PM/Tech Lead review required:** No

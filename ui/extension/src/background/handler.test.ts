@@ -50,14 +50,17 @@ vi.stubGlobal('fetch', mockFetch)
 // `clerkInstance`), the implementation must match these expectations.
 // ---------------------------------------------------------------------------
 
-const mockGetToken = vi.fn()
-const mockClerkSession = {
-  getToken: mockGetToken,
-}
-
-let mockClerkInstance: { session: typeof mockClerkSession | null } = {
-  session: mockClerkSession,
-}
+// vi.hoisted() ensures these variables are initialized before vi.mock() factory runs.
+// vi.mock() is hoisted to the top of the file by Vitest — any variables it references
+// must be declared via vi.hoisted() or they'll be uninitialized when the factory executes.
+const { mockGetToken, mockClerkSession, mockClerkInstance } = vi.hoisted(() => {
+  const mockGetToken = vi.fn()
+  const mockClerkSession = { getToken: mockGetToken }
+  const mockClerkInstance: { session: { getToken: typeof mockGetToken } | null } = {
+    session: mockClerkSession,
+  }
+  return { mockGetToken, mockClerkSession, mockClerkInstance }
+})
 
 // Mock the background clerk module (the file that will export the clerk instance)
 // After ISS-003, handler.ts imports from a module that provides the clerk instance.
@@ -65,16 +68,6 @@ let mockClerkInstance: { session: typeof mockClerkSession | null } = {
 vi.mock('@clerk/chrome-extension/background', () => ({
   __unstable__createClerkClient: vi.fn().mockReturnValue(mockClerkInstance),
 }))
-
-// We also need to mock the import.meta.env for the publishable key
-// This is handled by Vite's test environment; we set it directly.
-vi.stubGlobal('import', {
-  meta: {
-    env: {
-      VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_abc123',
-    },
-  },
-})
 
 // ---------------------------------------------------------------------------
 // Import module under test AFTER mocks are established

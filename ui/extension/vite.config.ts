@@ -10,6 +10,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    env: {
+      VITE_CLERK_PUBLISHABLE_KEY: 'pk_test_placeholder_for_testing_only',
+    },
   },
   plugins: [react()],
   // root=src so HTML entrypoints output at popup/index.html and sidepanel/index.html

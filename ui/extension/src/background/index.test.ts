@@ -59,6 +59,11 @@ vi.mock('@clerk/chrome-extension/background', () => ({
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // Reset module cache so each test re-executes index.ts (and handler.ts) from
+  // scratch — otherwise ES module caching means __unstable__createClerkClient
+  // and addListener only run on the first import, making callOrder empty in
+  // subsequent tests. vi.mock() registrations persist across resets.
+  vi.resetModules()
   callOrder.length = 0
   vi.clearAllMocks()
   mockOnMessageAddListener.mockImplementation(() => {

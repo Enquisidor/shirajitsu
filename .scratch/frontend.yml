@@ -1,9 +1,9 @@
 agent: frontend
 session_id: ext-auth-2026-05-11
-last_updated: "2026-05-15T16:10:00Z"
-status: complete
+last_updated: "2026-05-19T13:30:00Z"
+status: active
 
-current_task: ISS-001 complete — ClerkProvider popup entrypoint wrap
+current_task: ISS-003 complete — background handler Clerk JWT plumbing
 
 tasks:
   frontend-types-fix:
@@ -72,14 +72,6 @@ tasks:
       Fix: introduced safeTabMessage() helper (analogous to safeBroadcast) that calls chrome.tabs.sendMessage
       with a callback that voids chrome.runtime.lastError. Replaced the unguarded call with safeTabMessage.
 
-      All other sendMessage calls across all four files were already guarded:
-        - Popup.tsx GET_CONTEXT: guarded (callback reads lastError)
-        - Popup.tsx RUN_ANALYSIS: guarded (callback reads lastError, handles error)
-        - Popup.tsx safeBroadcast: guarded
-        - content/index.ts: callback form, reads lastError
-        - background/index.ts: no sendMessage calls
-        - Sidebar.tsx: no sendMessage calls
-
       Build: pnpm --filter @shirajitsu/extension build — PASS (tsc + vite, 0 errors)
       Tests: pnpm --filter @shirajitsu/extension test — 6/6 PASS
       Decision DEC-010 logged.
@@ -108,5 +100,42 @@ tasks:
 
       Decisions: DEC-017 logged.
       Completion artifact: .handoffs/frontend-completion-ISS-001.md
+
+  ISS-003-handler-clerk-jwt-plumbing:
+    description: "Replace legacy userToken storage read in handler.ts with live Clerk getToken() call; initialize background Clerk instance in background/index.ts"
+    status: complete
+    started_at: "2026-05-19T12:30:00Z"
+    completed_at: "2026-05-19T13:30:00Z"
+    output: ".handoffs/frontend-completion-ISS-003.md"
+    notes: |
+      Files changed:
+        - ui/extension/src/background/handler.ts
+            - Added import of __unstable__createClerkClient from @clerk/chrome-extension/background
+            - Module-level clerkPromise initialization with VITE_CLERK_PUBLISHABLE_KEY
+            - Changed handleAnalyze signature: (message, sendResponse) instead of (request)
+            - Removed chrome.storage.sync.get(['gatewayUrl', 'userToken']) pattern
+            - Removed const token = settings.userToken
+            - Added: const clerk = await clerkPromise; const token = await clerk.session?.getToken() ?? null
+            - Null token path calls sendResponse({ error: 'Not authenticated...' }) and returns
+            - gatewayUrl storage read preserved using callback form wrapped in Promise (DEC-023)
+        - ui/extension/src/background/index.ts
+            - Updated handleAnalyze call to new (message, sendResponse) signature
+            - Removed .then(sendResponse) chain; now handleAnalyze takes sendResponse directly
+        - ui/extension/.env.test (new)
+            - VITE_CLERK_PUBLISHABLE_KEY=pk_test_placeholder_for_testing_only
+            - Required for TC-017-a publishable key regex assertion (DEC-024)
+
+      Targeted test cases:
+        - TC-014-B (3 tests): session null path — auth error, no fetch
+        - TC-015 (4 tests): JWT in Authorization header
+        - TC-016 (3 tests): userToken not in source files
+        - TC-018 (3 tests): getToken() null path — auth error, no fetch
+        - TC-019 (1 test): gatewayUrl from storage still works
+        - TC-017 (2 tests): Clerk init with publishable key, ordering before listener
+        - TC-020 (2 tests): module loads clean, addListener called
+
+      Expected result: 15 previously failing tests now pass; 33 prior passing tests unaffected.
+      Decisions: DEC-023, DEC-024 logged.
+      Completion artifact: .handoffs/frontend-completion-ISS-003.md
 
 blockers: []

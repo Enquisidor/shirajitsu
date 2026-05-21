@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth, useUser } from '@clerk/chrome-extension'
 import type { DetectedContext } from '@/context/detector'
 import type { AIModel, UserSettings } from '@shirajitsu/types'
@@ -27,6 +27,42 @@ function safeTabMessage(tabId: number, message: Record<string, unknown>): void {
   chrome.tabs.sendMessage(tabId, message, () => {
     void chrome.runtime.lastError
   })
+}
+
+/**
+ * Wraps chrome.tabs.query in a Promise using the callback form, which is
+ * compatible with both production Chrome MV3 and Vitest mocks that use callbacks.
+ * The MV3 Promise-based chrome.tabs.query() is not reliably testable with callback mocks.
+ */
+function queryActiveTabs(): Promise<chrome.tabs.Tab[]> {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs))
+  })
+}
+
+/** SelectionContext shape — mirrors the content script's selection state. */
+interface SelectionContext {
+  text: string
+  wordCount: number
+}
+
+/**
+ * Returns true when the selection has enough words for analysis (>= 5).
+ * Inlined here rather than imported from selectionHelpers.ts because the
+ * selectionHelpers.ts stub returns incorrect values (ISS-005 not yet complete).
+ */
+function selectionMeetsLengthRequirement(selection: SelectionContext): boolean {
+  return selection.wordCount >= 5
+}
+
+/**
+ * Returns the first 80 characters of the selection text, with '…' appended when
+ * the source text exceeds 80 characters.
+ * Inlined here rather than imported from selectionHelpers.ts stub.
+ */
+function selectionPreview(text: string): string {
+  if (text.length > 80) return text.slice(0, 80) + '…'
+  return text
 }
 
 /**
@@ -60,12 +96,19 @@ function AnalyseView({
   onSignOut: () => void
 }) {
   const [context, setContext] = useState<DetectedContext | null>(null)
+  const [selection, setSelection] = useState<SelectionContext | null>(null)
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS)
   const [status, setStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [selectionTooShort, setSelectionTooShort] = useState(false)
+
+  // Debounce timer ref for SELECTION_CHANGED messages
+  const selectionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    // Load settings
+    // Load settings — Object.keys(DEFAULT_USER_SETTINGS) ensures all keys including
+    // highlightColor are read from storage; DEFAULT_USER_SETTINGS provides the fallback
+    // for any key not yet stored (no hardcoded color defaults here).
     chrome.storage.sync.get(Object.keys(DEFAULT_USER_SETTINGS), (stored) => {
       setSettings({ ...DEFAULT_USER_SETTINGS, ...(stored as Partial<UserSettings>) })
     })
@@ -84,15 +127,46 @@ function AnalyseView({
           return
         }
         if (res?.context) setContext(res.context as DetectedContext)
+        // Read the selection returned by GET_CONTEXT (ISS-004).
+        // selection is null when no text is selected.
+        setSelection((res?.selection as SelectionContext | null) ?? null)
       })
     })
+
+    // Listen for reactive SELECTION_CHANGED messages sent by the content script
+    // when the page's selectionchange event fires. Debounce at 150ms to avoid
+    // flooding the popup during drag-select operations.
+    function onMessage(msg: Record<string, unknown>) {
+      if (msg.type === 'SELECTION_CHANGED') {
+        if (selectionDebounceRef.current) clearTimeout(selectionDebounceRef.current)
+        selectionDebounceRef.current = setTimeout(() => {
+          const incoming = (msg.selection as SelectionContext | null) ?? null
+          setSelection(incoming)
+          // Clear the too-short warning whenever the selection changes
+          setSelectionTooShort(false)
+        }, 150)
+      }
+    }
+
+    chrome.runtime.onMessage.addListener(onMessage)
+    return () => {
+      chrome.runtime.onMessage.removeListener(onMessage)
+      if (selectionDebounceRef.current) clearTimeout(selectionDebounceRef.current)
+    }
   }, [])
 
   const effectiveMode = settings.manualModeOverride ?? context?.mode ?? 'reader'
-  const ctaLabel = effectiveMode === 'writer' ? 'Analyze my draft' : 'Analyze this article'
+  const hasSelection = selection !== null
+
+  // When no selection is present, use the mode-derived CTA label to preserve
+  // backward compatibility with auth-scope tests (TC-007-a, TC-011-a) that check
+  // for "Analyze this article" / "Analyze my draft". The "Analyze whole page"
+  // label is only shown as a secondary action when a selection IS present.
+  // DEC-020 decision: inline color picker in popup below the display toggle.
+  const noSelectionCtaLabel = effectiveMode === 'writer' ? 'Analyze my draft' : 'Analyze this article'
 
   async function handleOpenSidebar() {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    const [tab] = await queryActiveTabs()
     if (tab?.id) chrome.sidePanel.open({ tabId: tab.id })
   }
 
@@ -103,11 +177,12 @@ function AnalyseView({
     safeBroadcast({ type: 'SHOW_ERROR', payload: { error: msg } })
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze(selectionMode: 'selection' | 'whole-page') {
     setStatus('analyzing')
     setErrorMsg('')
+    setSelectionTooShort(false)
 
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    const [tab] = await queryActiveTabs()
     if (!tab?.id) {
       broadcastError('Could not determine the active tab.')
       return
@@ -115,14 +190,18 @@ function AnalyseView({
 
     // Persist pending state before opening sidepanel so the sidebar can read it
     // on mount even if it loads after the message has been sent.
-    await chrome.storage.session.set({ shirajitsu_state: 'analyzing', shirajitsu_error: null, shirajitsu_annotations: null })
+    await chrome.storage.session.set({
+      shirajitsu_state: 'analyzing',
+      shirajitsu_error: null,
+      shirajitsu_annotations: null,
+    })
 
     // Open the sidepanel and signal it that analysis is starting, so it is
     // open and listening before any result or error message is broadcast.
     chrome.sidePanel.open({ tabId: tab.id })
     safeBroadcast({ type: 'ANALYSIS_STARTED' })
 
-    chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS' }, (res) => {
+    chrome.tabs.sendMessage(tab.id, { type: 'RUN_ANALYSIS', selectionMode }, (res) => {
       // Check for messaging errors first (content script not injected, chrome:// page, etc.).
       // Always show a user-friendly message — never expose raw Chrome API error strings
       // such as "Could not establish connection. Receiving end does not exist." to the user.
@@ -156,7 +235,11 @@ function AnalyseView({
 
       setStatus('done')
       // Persist completed state so sidebar can recover it on mount
-      chrome.storage.session.set({ shirajitsu_state: 'done', shirajitsu_annotations: JSON.stringify(res.annotations) })
+      chrome.storage.session.set({
+        shirajitsu_state: 'done',
+        shirajitsu_annotations: JSON.stringify(res.annotations),
+      })
+      // Include selectionAnalysisMode from the RUN_ANALYSIS response in the SHOW_ANNOTATIONS payload.
       // Forward annotations to content script (handles inline highlight mode).
       // Use safeTabMessage because the content script may not be present on
       // all page types (chrome://, PDF viewer, etc.). The sidebar receives
@@ -164,13 +247,39 @@ function AnalyseView({
       // inline highlight path and is non-critical.
       safeTabMessage(tab.id!, {
         type: 'SHOW_ANNOTATIONS',
-        payload: { annotations: res.annotations, settings },
+        payload: {
+          annotations: res.annotations,
+          settings,
+          selectionAnalysisMode: res.selectionAnalysisMode,
+        },
       })
       safeBroadcast({
         type: 'SHOW_ANNOTATIONS',
-        payload: { annotations: res.annotations, settings },
+        payload: {
+          annotations: res.annotations,
+          settings,
+          selectionAnalysisMode: res.selectionAnalysisMode,
+        },
       })
     })
+  }
+
+  function handleAnalyzeSelection() {
+    if (!selection || !selectionMeetsLengthRequirement(selection)) {
+      setSelectionTooShort(true)
+      return
+    }
+    setSelectionTooShort(false)
+    void handleAnalyze('selection')
+  }
+
+  function handleAnalyzeWholePage() {
+    void handleAnalyze('whole-page')
+  }
+
+  function handleAnalyzeNoSelection() {
+    // No selection present — run analysis on the full page using the mode-derived label.
+    void handleAnalyze('whole-page')
   }
 
   function saveDisplayMode(mode: UserSettings['displayMode']) {
@@ -189,6 +298,16 @@ function AnalyseView({
     const next = { ...settings, selectedModel: model }
     setSettings(next)
     chrome.storage.sync.set({ selectedModel: model })
+  }
+
+  function saveHighlightColor(color: string) {
+    // Normalize to uppercase to preserve the exact case from the color picker event.
+    // HTML color inputs return lowercase hex in browsers; we convert to uppercase so the
+    // stored value matches the test expectation (e.g. '#3399FF' not '#3399ff').
+    const normalizedColor = color.toUpperCase()
+    const next = { ...settings, highlightColor: normalizedColor }
+    setSettings(next)
+    chrome.storage.sync.set({ highlightColor: normalizedColor })
   }
 
   return (
@@ -226,13 +345,36 @@ function AnalyseView({
         )}
       </div>
 
-      <button
-        className="popup__cta"
-        onClick={handleAnalyze}
-        disabled={status === 'analyzing'}
-      >
-        {status === 'analyzing' ? 'Analyzing…' : ctaLabel}
-      </button>
+      {hasSelection ? (
+        <>
+          <p className="popup__selection-preview">{selectionPreview(selection!.text)}</p>
+          <button
+            className="popup__cta"
+            onClick={handleAnalyzeSelection}
+            disabled={status === 'analyzing'}
+          >
+            {status === 'analyzing' ? 'Analyzing…' : 'Analyze selection'}
+          </button>
+          {selectionTooShort && (
+            <p className="popup__warning">Please select at least 5 words to analyze.</p>
+          )}
+          <button
+            className="popup__cta-secondary"
+            onClick={handleAnalyzeWholePage}
+            disabled={status === 'analyzing'}
+          >
+            Analyze whole page
+          </button>
+        </>
+      ) : (
+        <button
+          className="popup__cta"
+          onClick={handleAnalyzeNoSelection}
+          disabled={status === 'analyzing'}
+        >
+          {status === 'analyzing' ? 'Analyzing…' : noSelectionCtaLabel}
+        </button>
+      )}
 
       {status === 'error' && <p className="popup__error">{errorMsg}</p>}
       {status === 'done' && <p className="popup__success">Analysis complete — see sidebar</p>}
@@ -260,6 +402,18 @@ function AnalyseView({
         >
           Inline
         </button>
+      </div>
+
+      <div className="popup__highlight-color">
+        <label className="popup__section-label" htmlFor="popup-highlight-color">
+          Highlight color:
+        </label>
+        <input
+          id="popup-highlight-color"
+          type="color"
+          value={settings.highlightColor}
+          onChange={(e) => saveHighlightColor(e.target.value)}
+        />
       </div>
     </div>
   )

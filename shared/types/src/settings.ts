@@ -27,6 +27,8 @@ export interface UserSettings {
   selectedModel: AIModel
   /** The search provider used to find sources for each claim */
   selectedSearchProvider: SearchProvider
+  /** The background color applied to all inline highlight spans, stored as a hex color string */
+  highlightColor: string
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -36,4 +38,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   showUnverifiedAnnotations: true,
   selectedModel: DEFAULT_MODEL,
   selectedSearchProvider: DEFAULT_SEARCH_PROVIDER,
+  highlightColor: '#FFFF00',
 }

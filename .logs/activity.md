@@ -422,3 +422,45 @@
 **Issues flagged:**
 - TC-001 through TC-013 in Popup.test.tsx cannot pass with ISS-001 alone — they require ISS-002 (Popup.tsx conditional rendering with useAuth/useUser). Confirmed: test file imports Popup directly; main.tsx entrypoint changes are not exercised by the test suite. Documented in completion artifact. Status is Completed-with-issues because the stated goal of "making TC-001 through TC-013 pass" is only achievable after ISS-002 merges.
 
+---
+
+## Entry: ISS-003-handler-clerk-jwt-plumbing
+
+**Agent:** Frontend Engineer
+**Task ID:** ISS-003
+**Status:** Completed
+**Date:** 2026-05-19
+
+**Task description:** Replace legacy `chrome.storage.sync['userToken']` read in `background/handler.ts` with a live Clerk `getToken()` call; initialize a Clerk instance in the background service worker context.
+
+**Inputs received:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.spec/issues/ISS-003-handler-clerk-jwt-plumbing.md`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.ts` (pre-implementation)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts` (pre-implementation)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.test.ts` (TC-014-B through TC-019)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.test.ts` (TC-017, TC-020)
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/package.json`
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/node_modules/@clerk/chrome-extension/dist/types/background/index.d.ts`
+
+**Outputs produced:**
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/handler.ts` — New signature: `handleAnalyze(message, sendResponse)`; Clerk init via `__unstable__createClerkClient`; token via `clerk.session?.getToken()`; legacy `userToken` path removed
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/src/background/index.ts` — Updated to use new `handleAnalyze(message, sendResponse)` signature
+- `/Users/alexweinstein/Documents/Code/shirajitsu/ui/extension/.env.test` — Test environment publishable key for TC-017-a
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.handoffs/frontend-completion-ISS-003.md` — Completion artifact
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.logs/decisions.md` — DEC-023, DEC-024 appended
+- `/Users/alexweinstein/Documents/Code/shirajitsu/.scratch/frontend.yml` — Updated
+
+**Self-checks applied:**
+- Security: completed — ClerkJwt obtained from live Clerk session only, never from storage; token in Authorization header only, never in URL; no token logging; no secrets in code; `userToken` legacy path fully removed
+- Accessibility: completed — background service worker has no UI surface; N/A
+- Performance: completed — Clerk instance initialized once at module level, not per-request; single storage read per handleAnalyze call
+- Design accuracy (architectural): completed — `handleAnalyze` uses ClerkJwt terminology consistent with glossary; `POST /v1/analyze` with `Authorization: Bearer` per API contract; `userToken` not read anywhere; `gatewayUrl` read preserved
+
+**Decisions made:**
+- Use callback form of `chrome.storage.sync.get` wrapped in Promise to match test mock interface — DEC-023
+- Create `.env.test` with placeholder `VITE_CLERK_PUBLISHABLE_KEY` to satisfy TC-017-a regex assertion — DEC-024
+
+**Assumptions made:**
+- Vitest dynamic imports (`await import('./index')`) within test functions re-execute the module on each call, enabling TC-017-b's ordering assertion to pass. This assumption is based on the test author's comment "Re-import to re-execute the module initialization" and the standard Vitest behavior for dynamic imports in test bodies. If Vitest caches modules within a test file, TC-017-b may not pass — this would be a test design issue requiring Test Engineer review.
+
+**Issues flagged:** None at P2 or above.

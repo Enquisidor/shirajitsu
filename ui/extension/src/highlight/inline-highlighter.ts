@@ -4,17 +4,23 @@ import type { CharacterMapEntry } from '@/context/extractor'
 const HIGHLIGHT_CLASS = 'shirajitsu-highlight'
 const TOOLTIP_CLASS = 'shirajitsu-tooltip'
 
-const RISK_COLORS: Record<string, string> = {
-  high: 'rgba(230, 57, 70, 0.25)',
-  medium: 'rgba(244, 162, 97, 0.25)',
-  low: 'rgba(82, 183, 136, 0.25)',
+const DEFAULT_HIGHLIGHT_COLOR = '#FFFF00'
+
+const RISK_OUTLINE_COLORS: Record<string, string> = {
+  high: 'rgba(230, 57, 70, 0.8)',
+  medium: 'rgba(244, 162, 97, 0.8)',
+  low: 'rgba(82, 183, 136, 0.8)',
 }
 
-export function applyHighlights(annotations: Annotation[], characterMap: CharacterMapEntry[]) {
+export function applyHighlights(
+  annotations: Annotation[],
+  characterMap: CharacterMapEntry[],
+  highlightColor: string = DEFAULT_HIGHLIGHT_COLOR,
+) {
   clearHighlights()
 
   for (const annotation of annotations) {
-    highlightAnnotation(annotation, characterMap)
+    highlightAnnotation(annotation, characterMap, highlightColor)
   }
 }
 
@@ -30,7 +36,11 @@ export function clearHighlights() {
   document.querySelectorAll(`.${TOOLTIP_CLASS}`).forEach((el) => el.remove())
 }
 
-function highlightAnnotation(annotation: Annotation, characterMap: CharacterMapEntry[]) {
+function highlightAnnotation(
+  annotation: Annotation,
+  characterMap: CharacterMapEntry[],
+  highlightColor: string,
+) {
   const { charOffset, charLength, riskLevel } = annotation.claim
   const end = charOffset + charLength
 
@@ -39,25 +49,36 @@ function highlightAnnotation(annotation: Annotation, characterMap: CharacterMapE
   const endEntry = characterMap[Math.min(end - 1, characterMap.length - 1)]
   if (!startEntry || !endEntry) return
 
-  const color = RISK_COLORS[riskLevel] ?? RISK_COLORS.medium
+  const outlineColor = RISK_OUTLINE_COLORS[riskLevel] ?? RISK_OUTLINE_COLORS.medium
 
   if (startEntry.node === endEntry.node) {
-    wrapRange(startEntry.node, startEntry.nodeOffset, endEntry.nodeOffset + 1, color, annotation)
+    wrapRange(startEntry.node, startEntry.nodeOffset, endEntry.nodeOffset + 1, highlightColor, outlineColor, annotation)
   } else {
     // Multi-node range: wrap each node's segment separately
-    wrapRange(startEntry.node, startEntry.nodeOffset, startEntry.node.length, color, annotation)
-    wrapRange(endEntry.node, 0, endEntry.nodeOffset + 1, color, annotation)
+    wrapRange(startEntry.node, startEntry.nodeOffset, startEntry.node.length, highlightColor, outlineColor, annotation)
+    wrapRange(endEntry.node, 0, endEntry.nodeOffset + 1, highlightColor, outlineColor, annotation)
   }
 }
 
-function wrapRange(node: Text, start: number, end: number, color: string, annotation: Annotation) {
+function wrapRange(
+  node: Text,
+  start: number,
+  end: number,
+  highlightColor: string,
+  outlineColor: string,
+  annotation: Annotation,
+) {
   const range = document.createRange()
   range.setStart(node, start)
   range.setEnd(node, end)
 
   const span = document.createElement('span')
   span.className = HIGHLIGHT_CLASS
-  span.style.backgroundColor = color
+  // Use direct property assignment for backgroundColor to prevent CSS injection:
+  // the browser silently rejects invalid CSS values assigned via property access,
+  // whereas cssText concatenation would allow injected semicolons to add properties.
+  span.style.backgroundColor = highlightColor
+  span.style.outline = `2px solid ${outlineColor}`
   span.style.cursor = 'pointer'
   span.dataset.annotationId = annotation.claim.charOffset.toString()
 
